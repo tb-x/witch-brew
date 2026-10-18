@@ -85,7 +85,7 @@
 <script>
 'use strict';
 /* ======== tuning knobs ======== */
-const ASSET_V = 1;           // bump after changing any picture in assets/
+const ASSET_V = 2;           // bump after changing any picture in assets/
 const VIEW_MIN = 180;        // at least this many game pixels across the short side of the screen (smaller = bigger witch)
 const CEIL = 8;              // soft ceiling, units below the top edge
 const GROUND_H = 20;         // height of the ground strip
@@ -112,38 +112,46 @@ const SFX_VOL = 0.35;        // loudness of the beeps
 
 const ING = {
   flower:   {e:'🌸', one:'flower',     many:'flowers',     col:'#ff8fc8', img:'ing-flower'},
-  mushroom: {e:'🍄', one:'mushroom',   many:'mushrooms',   col:'#e8473f'},
-  berry:    {e:'🫐', one:'blueberry',  many:'blueberries', col:'#5560e0'},
-  leaf:     {e:'🍁', one:'leaf',       many:'leaves',      col:'#e8762b'},
-  apple:    {e:'🍎', one:'apple',      many:'apples',      col:'#d9302c'},
-  feather:  {e:'🪶', one:'feather',    many:'feathers',    col:'#6fb7e8'},
-  snow:     {e:'❄️', one:'snowflake',  many:'snowflakes',  col:'#bfe6ff'},
-  star:     {e:'⭐', one:'star',       many:'stars',       col:'#ffd447'},
-  moon:     {e:'🌙', one:'moon',       many:'moons',       col:'#ffe58a'},
-  drop:     {e:'💧', one:'water drop', many:'water drops', col:'#4fb3ff'},
+  mushroom: {e:'🍄', one:'mushroom',   many:'mushrooms',   col:'#e8473f', img:'ing-mushroom'},
+  berry:    {e:'🫐', one:'blueberry',  many:'blueberries', col:'#5560e0', img:'ing-berry'},
+  leaf:     {e:'🍁', one:'leaf',       many:'leaves',      col:'#e8762b', img:'ing-leaf'},
+  apple:    {e:'🍎', one:'apple',      many:'apples',      col:'#d9302c', img:'ing-apple'},
+  feather:  {e:'🪶', one:'feather',    many:'feathers',    col:'#6fb7e8', img:'ing-feather'},
+  snow:     {e:'❄️', one:'snowflake',  many:'snowflakes',  col:'#bfe6ff', img:'ing-snow'},
+  star:     {e:'⭐', one:'star',       many:'stars',       col:'#ffd447', img:'ing-star'},
+  moon:     {e:'🌙', one:'moon',       many:'moons',       col:'#ffe58a', img:'ing-moon'},
+  drop:     {e:'💧', one:'water drop', many:'water drops', col:'#4fb3ff', img:'ing-drop'},
 };
-const DECOYS = [{e:'🧦', say:'A smelly sock? No thanks!'}, {e:'👟', say:'An old shoe? No thanks!'}];
+const DECOYS = [{e:'🧦', img:'sock', say:'A smelly sock? No thanks!'}, {e:'👟', img:'shoe', say:'An old shoe? No thanks!'}];
 
-// sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours (the grey-box look);
-// art: PixelLab pictures that replace them where a level has its own
+// sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours (the grey-box look,
+// used until the pictures load). art: the level's PixelLab pictures: `far` and `near` background strips,
+// `soil` (the colour under the near strip), and the obstacles: a `cap` at the gap (`capScale` times bigger),
+// a `body` stacked from it to the ground (`bodyStep` makes it a wobbly pile instead of a column),
+// and a `top` piled up from the gap into the sky, `topStep` apart
 const LEVELS = [
   {icon:'🌼', sky:['#8fd3ff','#e6f6ff'], hills:['#a6dc8f','#7cc66a'], ground:'#6bb35a',
-   art:{far:'bg-meadow-far', near:'bg-meadow-near', crown:'crown-meadow', trunk:'bark-oak', cloud:'cloud'},
+   art:{far:'bg-meadow-far', near:'bg-meadow-near', soil:'#6f4534', cap:'crown-meadow', body:'bark-oak', top:'cloud'},
    bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96,
    magic:'flowers', prize:'🌷', line:'Look! The flowers are growing!'},
-  {icon:'🌲', sky:['#9fdcc0','#eafff3'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
+  {icon:'🌲', sky:['#7fdcae','#e4fff0'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
+   art:{far:'bg-forest-far', near:'bg-forest-near', soil:'#191d2b', cap:'fir', body:'bark-dark', top:'vines', topStep:30},
    bot:['#6b4428','#2f7a3a'], top:['#2f7a3a','#3d9447'], recipe:{mushroom:2, berry:2}, speed:1, gap:92,
    magic:'frog', prize:'🐸', line:'Look! The frog has a crown!'},
-  {icon:'🎃', sky:['#ff9f5a','#ffe0b0'], hills:['#c98a4a','#8a6a2f'], ground:'#6b7a32',
+  {icon:'🎃', sky:['#f5a640','#f5a640'], hills:['#c98a4a','#8a6a2f'], ground:'#6b7a32',
+   art:{far:'bg-autumn-far', near:'bg-autumn-near', soil:'#542629', cap:'hay-top', body:'hay-bale', bodyStep:22, top:'leaves-autumn', topStep:22},
    bot:['#7a5230','#e07a2a'], top:['#b46a3a','#7a4a2a'], recipe:{leaf:2, apple:2, feather:1}, speed:1.05, gap:90, decoys:true,
    magic:'pumpkin', prize:'🎃', line:'Look! The pumpkin is growing big!'},
   {icon:'⛄', sky:['#bcdcff','#f4f9ff'], hills:['#e3eefa','#cfdff0'], ground:'#f2f7ff',
+   art:{far:'bg-snow-far', near:'bg-snow-near', soil:'#3c566c', cap:'rock-top', body:'rock', top:'cloud-snow', topStep:24},
    bot:['#8d97a8','#ffffff'], top:['#c7e3ff','#ffffff'], recipe:{snow:3, berry:2}, speed:1.1, gap:88, decoys:true,
    magic:'snowman', prize:'⛄', line:'Look! The snowman is dancing!'},
   {icon:'🌙', sky:['#141a45','#40377f'], hills:['#2b2f63','#1f2550'], ground:'#2a3358', night:true,
+   art:{far:'bg-night-far', near:'bg-night-near', soil:'#020a38', cap:'tower-roof', capScale:2, body:'tower', top:'cloud-night', topStep:22},
    bot:['#3b3f6b','#59609a'], top:['#555c8f','#7a80b8'], recipe:{star:3, moon:1, drop:2}, speed:1.15, gap:88, decoys:true,
    magic:'fireworks', prize:'🎆', line:'Look! Fireworks!'},
-  {icon:'🌈', sky:['#ffd1ec','#d3ecff'], hills:['#ffe3f3','#e7f4ff'], ground:'#bdf0cc',
+  {icon:'🌈', sky:['#dce5fc','#dce5fc'], hills:['#ffe3f3','#e7f4ff'], ground:'#bdf0cc',
+   art:{far:'bg-rainbow-far', near:'bg-rainbow-near', soil:'#fcb7e1', cap:'cloud-pink', body:'cloud-pink', bodyStep:18, top:'cloud-pink', topStep:20},
    bot:['#ffffff','#fff3fb'], top:['#ffffff','#f3f9ff'], recipe:{star:2, flower:2, drop:2, feather:1}, speed:1.2, gap:86, decoys:true,
    magic:'rainbow', prize:'🌈', line:'Look! A rainbow and a unicorn!'},
 ];
@@ -272,7 +280,10 @@ function loadArt(names){
     im.src = `assets/${n}.png?v=${ASSET_V}`;
   }
 }
-loadArt(['witch', 'cottage', 'cauldron', 'cloud', 'ing-flower', 'crown-meadow', 'bark-oak', 'bg-meadow-far', 'bg-meadow-near']);
+loadArt(['witch', 'cottage', 'cauldron', 'cloud', 'sock', 'shoe', 'frog', 'gold-crown', 'pumpkin', 'snowman', 'unicorn',
+  ...Object.values(ING).map(i => i.img),
+  ...LEVELS.flatMap(l => Object.entries(l.art || {}).filter(([k]) => ['far', 'near', 'cap', 'body', 'top'].includes(k)).map(([, v]) => v))]
+  .filter((n, i, a) => a.indexOf(n) === i));
 const R = Math.round;
 function sprite(n, x, y, c = ctx){ const im = ART[n]; c.drawImage(im, R(x - im.width / 2), R(y - im.height / 2)); }
 
@@ -556,6 +567,19 @@ function ingredient(kind, x, y, size, alpha = 1, c = ctx){
   else { c.imageSmoothingEnabled = false; c.drawImage(im, x - size / 2, y - size / 2, size, size); }
   c.globalAlpha = 1;
 }
+function decoy(d, x, y, alpha = 1){
+  const im = ART[d.img];
+  if(!im) return emoji(d.e, x, y, 13, alpha);
+  ctx.globalAlpha = alpha; ctx.drawImage(im, R(x - im.width / 2), R(y - im.height / 2)); ctx.globalAlpha = 1;
+}
+// a picture standing on (x, bottom), `k` times its size, or its emoji when it hasn't loaded
+function figure(n, e, x, bottom, k = 1, alpha = 1){
+  const im = ART[n];
+  if(!im) return emoji(e, x, bottom - 9 * k, 18 * k, alpha);
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(im, R(x - im.width * k / 2), R(bottom - im.height * k), R(im.width * k), R(im.height * k));
+  ctx.globalAlpha = 1;
+}
 function hill(x, a, f){ return Math.sin(x * 0.013 * f) * a + Math.sin(x * 0.031 * f + 1) * a * 0.5; }
 
 function drawBackdrop(camX){
@@ -593,7 +617,12 @@ function drawBackdrop(camX){
     for(let x = 0; x <= vw + 4; x += 4) ctx.lineTo(x, g - up + hill(x + camX * par, amp, f));
     ctx.lineTo(vw, vh); ctx.fill();
   });
-  if(ART[art.near + '-tile']){ strip(ART[art.near + '-tile'], camX, g - 16); return; }
+  if(ART[art.near + '-tile']){
+    // the strips' grass line is 40 rows down (art-src/prep.py), and sits just below the ground line
+    ctx.fillStyle = art.soil; ctx.fillRect(0, g + 3, vw, vh - g);
+    strip(ART[art.near + '-tile'], camX, g + 3 - 40);
+    return;
+  }
   ctx.fillStyle = lv.ground; ctx.fillRect(0, g, vw, vh - g);
   ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(0, g, vw, 2);
   ctx.fillStyle = 'rgba(0,0,0,.1)';
@@ -609,17 +638,23 @@ function strip(img, off, y){
 function drawPillar(p){
   const x = p.x - cam, gc = gapCentre(p), t = gc - p.gap / 2, b = gc + p.gap / 2, g = ground(), art = lv.art || {};
   const cx = x + PILLAR_W / 2;
-  if(ART[art.trunk] && ART[art.crown] && ART[art.cloud]){
-    // a tree growing up from the ground: bark stacked up to a leafy crown at the gap
-    const bark = ART[art.trunk], crown = ART[art.crown], cloud = ART[art.cloud];
-    for(let y = R(b + crown.height - 10); y < g + 4; y += bark.height) ctx.drawImage(bark, R(cx - bark.width / 2), y);
-    ctx.drawImage(crown, R(cx - crown.width / 2), R(b - 4));
-    // a pile of clouds hanging down from the sky, the lowest one at the gap
-    let i = 0;
-    for(let y = t - cloud.height + 6; y > -cloud.height; y -= 20, i++){
-      const dx = (i % 2 ? 5 : -5) + ((p.x / PILLAR_EVERY) % 2 ? 2 : -2);
-      ctx.drawImage(cloud, R(cx - cloud.width / 2 + dx), R(y));
+  const cap = ART[art.cap], body = ART[art.body], top = ART[art.top];
+  if(cap && body && top){
+    const odd = (p.x / PILLAR_EVERY) % 2 ? 2 : -2;
+    // up from the ground: the body stacked from the cap down (a wobbly pile when it has a bodyStep)
+    const k = art.capScale || 1, cw = cap.width * k, ch = cap.height * k, step = art.bodyStep || body.height;
+    for(let y = b - 4 + ch - 8, i = 0; y < g + 4; y += step, i++){
+      const dx = art.bodyStep ? (i % 2 ? 4 : -4) + odd : 0;
+      ctx.drawImage(body, R(cx - body.width / 2 + dx), R(y));
     }
+    ctx.drawImage(cap, R(cx - cw / 2), R(b - 4), cw, ch);
+    // down from the sky: a pile whose lowest piece hangs at the gap (drawn top first, so lower ones are in front)
+    const ys = [];
+    for(let y = t - top.height + 6; y > -top.height; y -= art.topStep || 20) ys.push(y);
+    ys.reverse().forEach((y, i) => {
+      const dx = ((ys.length - i) % 2 ? 5 : -5) + odd;
+      ctx.drawImage(top, R(cx - top.width / 2 + dx), R(y));
+    });
     return;
   }
   ctx.fillStyle = lv.top[0]; ctx.beginPath(); ctx.roundRect(x, -10, PILLAR_W, t + 10, [0, 0, 8, 8]); ctx.fill();
@@ -685,11 +720,11 @@ function drawFly(){
     const x = it.x - cam, y = CEIL + it.fy * band() + Math.sin(it.t * 3) * 2;
     if(it.bat != null){
       ctx.save(); ctx.translate(x + it.bat * 90, y - it.bat * 80 + it.bat * it.bat * 40); ctx.rotate(it.bat * 8);
-      emoji(it.decoy.e, 0, 0, 13, Math.max(0, 1 - it.bat / 1.5)); ctx.restore();
+      decoy(it.decoy, 0, 0, Math.max(0, 1 - it.bat / 1.5)); ctx.restore();
       continue;
     }
     if(it.taken) continue;
-    if(it.decoy){ emoji(it.decoy.e, x, y, 13); continue; }
+    if(it.decoy){ decoy(it.decoy, x, y); continue; }
     const big = !!ART[ING[it.kind].img];
     ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(R(x), R(y), (big ? 13 : 9) + Math.sin(it.t * 5), 0, 7); ctx.fill();
     ingredient(it.kind, x, y, 13);
@@ -719,27 +754,24 @@ function drawBrew(){
   const sx = c.x + Math.min(58, vw * 0.32);
   if(lv.magic === 'frog'){
     const hop = m > 0.8 ? Math.abs(Math.sin((m - 0.8) * 6)) * 10 : 0;
-    emoji('🐸', sx, g - 9 - hop, 18);
-    if(m >= 0) emoji('👑', sx, lerp(-20, g - 25, ease(m / 0.8)) - (m > 0.8 ? hop : 0), 12);
+    figure('frog', '🐸', sx, g + 2 - hop);
+    if(m >= 0) figure('gold-crown', '👑', sx + 1, lerp(-10, g - 20, ease(m / 0.8)) - (m > 0.8 ? hop : 0), 0.75);
   }
-  if(lv.magic === 'pumpkin'){
-    const s = 18 * (1 + 1.5 * (m >= 0 ? easeBack(m / 1.2) : 0));
-    emoji('🎃', sx, g - s * 0.45, s);
-  }
+  if(lv.magic === 'pumpkin') figure('pumpkin', '🎃', sx, g + 2, 1 + (m >= 0 ? easeBack(m / 1.2) : 0));
   if(lv.magic === 'snowman'){
-    ctx.save(); ctx.translate(sx, g - 12 - (m >= 0 ? Math.abs(Math.sin(m * 7)) * 6 : 0)); ctx.rotate(m >= 0 ? Math.sin(m * 7) * 0.3 : 0);
-    emoji('⛄', 0, 0, 24); ctx.restore();
+    ctx.save(); ctx.translate(R(sx), R(g + 2 - (m >= 0 ? Math.abs(Math.sin(m * 7)) * 6 : 0))); ctx.rotate(m >= 0 ? Math.sin(m * 7) * 0.25 : 0);
+    figure('snowman', '⛄', 0, 0); ctx.restore();
   }
   if(lv.magic === 'flowers' && m >= 0){
-    for(let i = 0; i < 10; i++){ const s = 15 * easeBack((m - i * 0.12) / 0.6);
-      if(s > 0.5) emoji(['🌷', '🌻', '🌼'][i % 3], (i + 0.5) * vw / 10, g + 2 - s * 0.45, s); }
+    for(let i = 0; i < 10; i++){ const k = easeBack((m - i * 0.12) / 0.6);
+      if(k > 0.05) figure('ing-flower', ['🌷', '🌻', '🌼'][i % 3], (i + 0.5) * vw / 10, g + 6, k); }
   }
   if(lv.magic === 'rainbow' && m >= 0){
     const rad = Math.min(vw * 0.46, g - CEIL - 20), cols = ['#ff5a5a', '#ffa64d', '#ffe04d', '#5fd36b', '#4fa8ff', '#9a6bff'];
     ctx.lineWidth = rad * 0.07;
     cols.forEach((col, i) => { ctx.strokeStyle = col; ctx.beginPath();
       ctx.arc(vw / 2, g, rad - i * rad * 0.07, Math.PI, Math.PI + Math.PI * ease(m / 1.5)); ctx.stroke(); });
-    if(m > 1) emoji('🦄', lerp(-20, vw + 20, (m - 1) / 3), g - rad - 4 + Math.sin(m * 5) * 4, 20);
+    if(m > 1) figure('unicorn', '🦄', lerp(-30, vw + 30, (m - 1) / 3), g - rad + 12 + Math.sin(m * 5) * 4);
   }
   // fire, pot, liquid
   ctx.fillStyle = '#ff9a3c';
