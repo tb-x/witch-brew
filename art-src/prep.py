@@ -10,6 +10,7 @@ from PIL import Image
 
 SRC = Path(__file__).resolve().parent
 OUT = SRC.parent / 'assets'
+FRIEND_SIZE = 0.65   # the broom friends are shrunk to this size, so they don't crowd the witch
 NEAR_SOLID = 80   # the near strips are cropped so their first solid row (the grass line) is this far down
 
 
@@ -115,6 +116,25 @@ def sheet(frames):
     return out
 
 
+def shrink(im, k):
+    """Make a picture smaller and keep it crisp: resample it smoothly, then make every pixel either
+    see-through or solid and snap its colour to the nearest colour of the original."""
+    pal = sorted({px[:3] for px in im.getdata() if px[3] > 128})
+    small = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+    out = small.load()
+    cache = {}
+    for y in range(small.height):
+        for x in range(small.width):
+            r, g, b, a = out[x, y]
+            if a < 110:
+                out[x, y] = (0, 0, 0, 0)
+                continue
+            if (r, g, b) not in cache:
+                cache[(r, g, b)] = min(pal, key=lambda c: (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2)
+            out[x, y] = cache[(r, g, b)] + (255,)
+    return small
+
+
 def centre(im, width):
     x = (im.width - width) // 2
     return im.crop((x, 0, x + width, im.height))
@@ -128,10 +148,10 @@ def save(im, name):
 
 # the witch and her friends
 save(sheet([Image.open(SRC / 'frames' / f'witch-{i}.png').convert('RGBA') for i in range(8)]), 'witch-fly')
-save(sheet([Image.open(SRC / 'frames' / f'cat-{i}.png').convert('RGBA') for i in range(8)]), 'cat')
+save(sheet([shrink(Image.open(SRC / 'frames' / f'cat-{i}.png').convert('RGBA'), FRIEND_SIZE) for i in range(8)]), 'cat')
 for n in ('frog-crown', 'lantern', 'owl'):
-    save(trim(load(n)), n)
-save(trim(load('unicorn')).transpose(Image.FLIP_LEFT_RIGHT), 'unicorn')   # it faced left; it flies to the right
+    save(shrink(trim(load(n)), FRIEND_SIZE), n)
+save(shrink(trim(load('unicorn')), FRIEND_SIZE).transpose(Image.FLIP_LEFT_RIGHT), 'unicorn')   # it faced left; it flies to the right
 save(trim(load('cottage')), 'cottage')
 save(trim(load('cauldron')), 'cauldron')
 

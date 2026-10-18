@@ -22,8 +22,8 @@ match the pictures.
   mushrooms and two blueberries!" The recipe is shown as pictures at the top of the screen.
 - Tap anywhere (or press space) and the witch swoops up; let go and she glides gently down. If she
   touches the ground she just bounces back up.
-- Fly into an ingredient to catch it: it flies up into the recipe and the voice counts ("One!",
-  "Two!"). Extra ones you don't need just sparkle.
+- Fly into an ingredient to catch it: it flies up into the recipe and the voice counts it in a
+  little sentence ("First snowflake!", "Second snowflake!"). Extra ones you don't need just sparkle.
 - Trees, clouds and rocks stand in the way with wide gaps between them, and the witch is gently
   pulled towards the middle of the next gap. A bump makes her spin round, she drifts back, and for
   a moment she can fly straight through things.
@@ -31,8 +31,10 @@ match the pictures.
   "A smelly sock? No thanks!"
 - Missed an ingredient? More keep coming until the recipe is complete. Then "That's everything!
   Fly home!" and she glides down to her cottage.
-- At the cauldron: tap to throw the ingredients in one by one (the voice counts them), then stir
-  by rubbing round and round on the screen (tapping works too) until the bar is full.
+- At the cauldron: tap to throw the ingredients in one by one (the voice counts them again, "First
+  snowflake!"), then stir by rubbing round and round on the screen (tapping works too; a finger
+  circling the pot shows how). Five stars arch over the pot and light up one by one with a chime;
+  when the last one lights, the potion is ready.
   Abracadabra! The level's friend jumps out of the pot, somersaults onto the broom ("A black cat!
   She wants to fly with you!"), and the end card shows 🗺️ (levels), 🔄 (again) and ▶️ (next level).
 - The broom always carries every friend earned so far, on every level and on the title screen.
@@ -75,7 +77,7 @@ At the top of the script in `index.html`:
 | `HIT_R`, `PICK_R` | How close she must get to bump something (small = forgiving), and to catch an ingredient (big = easy) |
 | `OOPS_TIME`, `SAFE_TIME` | How long she spins after a bump, and how long she can then fly through things |
 | `ITEM_CHANCE`, `DECOY_CHANCE` | How often an ingredient appears between obstacles, and how often a sock or shoe does instead |
-| `STIR_NEEDED`, `STIR_TAP` | How much stirring finishes the potion, and how much one tap counts |
+| `STIR_NEEDED`, `STIR_TAP`, `STIR_STARS` | How much stirring finishes the potion, how much one tap counts, and how many stars light up on the way |
 | `MAGIC_TIME` | How long the potion's magic plays before the end card |
 | `SFX_VOL`, `VOICE_VOL`, `MUSIC_VOL` | Loudness of the effects, the voice (every line is evened out first) and the music |
 | `MUSIC_DUCK`, `MUSIC_XFADE` | How far the music dips while the voice talks; seconds of the track's end blended into its start so it loops without a seam |
@@ -112,7 +114,8 @@ which is no longer in the game. The untouched originals are in `art-src/`; `pyth
   `witch-b.png` isn't used) with `animate_image`; the frames are in `art-src/frames/`.
 - Her friends: `assets/cat.png` (8 frames of the cat swishing its tail and blinking, also made with
   `animate_image`), `frog-crown.png`, `lantern.png`, `owl.png` and `unicorn.png` (mirrored by the
-  script, as it faced left).
+  script, as it faced left). The script shrinks them all to 65% (`FRIEND_SIZE`) so they don't crowd
+  the witch, snapping every pixel back to the picture's own colours so they stay crisp.
 - `assets/cottage.png`, `assets/cauldron.png`: the witch's cottage (the chimney smoke is drawn in
   code) and an empty cauldron (the potion inside, the fire under it and the spoon are drawn in code).
 - Ingredients, `assets/ing-<name>.png`: flower, mushroom, berry (blueberries), leaf (maple), apple,
@@ -149,10 +152,11 @@ used commercially; we credit "elevenlabs.io" and "Eleven Music" anyway. No real 
 used. The audio is here only as this game's own sounds: it is not licensed for anyone else to reuse,
 and it is not covered by any licence that may later be put on this game's code.
 
-- **Voice**, `assets/say-*.mp3`, 29 clips: stock voice "Jessica - Playful, Bright, Warm", model
+- **Voice**, `assets/say-*.mp3`, 43 clips: stock voice "Jessica - Playful, Bright, Warm", model
   Eleven Multilingual v2, speed 0.85, stability 0.6 (the same voice and settings as Nut Run). The
-  lines are in `LINES` in `index.html`: the six "Find …!" recipes, "Tap to fly!", counting "One!" to
-  "Seven!", "Oops!", "Whoops!", "Bump!", the sock and shoe lines, "That's everything! Fly home!",
+  lines are in `LINES` in `index.html`: the six "Find …!" recipes, "Tap to fly!", the counting
+  lines (`say-c-<ingredient>-<n>.mp3`: "First flower!", "Second flower!", "Third flower!" and so on for
+  every ingredient, or "A feather!" and "A moon!" where a level only needs one), "Oops!", "Whoops!", "Bump!", the sock and shoe lines, "That's everything! Fly home!",
   "Tap to put them in the pot!", "Now stir! Round and round!", a line for each friend ("Abracadabra!
   A black cat! She wants to fly with you!" and so on) and "Hooray!".
 - **Sound effects**, `assets/sfx-*.mp3`, 11 clips made with the ElevenLabs sound effects model, each

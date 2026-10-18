@@ -85,7 +85,7 @@
 <script>
 'use strict';
 /* ======== tuning knobs ======== */
-const ASSET_V = 3;           // bump after changing any picture or sound in assets/
+const ASSET_V = 4;           // bump after changing any picture or sound in assets/
 const VIEW_MIN = 180;        // at least this many game units across the short side of the screen (smaller = bigger witch)
 const RES = 2;               // picture pixels per game unit (the PixelLab pictures are drawn at this size)
 const CEIL = 8;              // soft ceiling, units below the top edge
@@ -109,6 +109,7 @@ const ITEM_CHANCE = 0.75;    // chance of an ingredient between two obstacles (w
 const DECOY_CHANCE = 0.3;    // chance of a sock or shoe instead, on levels with `decoys`
 const STIR_NEEDED = 900;     // screen pixels of stirring (dragging) to finish the potion
 const STIR_TAP = 150;        // a tap counts as this much stirring
+const STIR_STARS = 5;        // stars over the pot that light up one by one while you stir
 const MAGIC_TIME = 5;        // seconds the potion's magic plays before the end card
 const SFX_VOL = 0.5;         // loudness of the sound effects
 const VOICE_VOL = 1;         // loudness of the voice (each clip is evened out first)
@@ -177,7 +178,7 @@ const LINES = {
   'find-1': 'Find three flowers!', 'find-2': 'Find two mushrooms and two blueberries!',
   'find-3': 'Find two leaves, two apples and one feather!', 'find-4': 'Find three snowflakes and two blueberries!',
   'find-5': 'Find three stars, one moon and two water drops!', 'find-6': 'Find two stars, two flowers, two water drops and one feather!',
-  tap: 'Tap to fly!', n1: 'One!', n2: 'Two!', n3: 'Three!', n4: 'Four!', n5: 'Five!', n6: 'Six!', n7: 'Seven!',
+  tap: 'Tap to fly!',
   oops: 'Oops!', whoops: 'Whoops!', bump: 'Bump!', sock: 'A smelly sock? No thanks!', shoe: 'An old shoe? No thanks!',
   home: "That's everything! Fly home!", pot: 'Tap to put them in the pot!', stir: 'Now stir! Round and round!',
   'magic-1': 'Abracadabra! A black cat! She wants to fly with you!',
@@ -188,6 +189,11 @@ const LINES = {
   'magic-6': 'Abracadabra! A rainbow, and a unicorn! Hooray!',
   hooray: 'Hooray!',
 };
+// counting what she catches and what goes in the pot: 'c-snow-1' is "First snowflake!" ("A feather!" when a level only needs one)
+for(const k in ING){
+  const most = Math.max(...LEVELS.map(l => l.recipe[k] || 0));
+  for(let n = 1; n <= most; n++) LINES[`c-${k}-${n}`] = most === 1 ? `A ${ING[k].one}!` : `${['First', 'Second', 'Third'][n - 1]} ${ING[k].one}!`;
+}
 const SFX_KEYS = ['flap', 'pick', 'bump', 'boing', 'nope', 'splash', 'bubble', 'poof', 'pop', 'home', 'jump'];
 
 /* ======== helpers ======== */
@@ -509,7 +515,7 @@ function take(it){
   const slot = hudSlots().find(s => s.kind === k && s.i === got[k] - 1);
   flyers.push({kind: k, x0: (it.x - cam) * scale, y0: (CEIL + it.fy * band()) * scale, x1: slot.x, y1: slot.y, s1: slot.s, t: 0});
   sfx.pick();
-  say('n' + got[k]);
+  say(`c-${k}-${got[k]}`);
   for(let i = 0; i < 8; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: '#fff6a8', s: 1.5});
   if(Object.keys(lv.recipe).every(k2 => got[k2] >= lv.recipe[k2])){
     complete = true; state = 'home';
@@ -582,7 +588,7 @@ function startBrew(){
   const basket = [];
   for(const k in lv.recipe) for(let i = 0; i < lv.recipe[k]; i++) basket.push({kind: k, state: 0, t: 0});
   brew = {phase: 'drop', basket, landed: 0, stir: 0, stirSound: 0, t: 0, magicT: 0, liquid: [111, 211, 111], target: [111, 211, 111],
-    fw: 0, snow: 0, friendT: -1, friendIn: false};
+    fw: 0, snow: 0, friendT: -1, friendIn: false, count: {}, lit: 0, litAt: []};
   sfx.home();
   say('pot');
 }
@@ -602,6 +608,18 @@ function friendSpot(i, x, y){
   return {x: x + (f.x - RIDER.body[0]) / RES, y: y + (f.y - RIDER.body[1]) / RES};
 }
 
+// the stars arching over the pot that light up as you stir
+function stirStar(i){
+  const c = cauldron(), a = (200 + 140 * i / (STIR_STARS - 1)) * Math.PI / 180;
+  return {x: c.x + Math.cos(a) * 42, y: c.y - 14 + Math.sin(a) * 44};
+}
+function starPath(x, y, r){
+  ctx.beginPath();
+  for(let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+  ctx.closePath();
+}
+
 function brewTap(){
   if(brew.phase === 'drop'){
     const it = brew.basket.find(b => b.state === 0);
@@ -617,9 +635,10 @@ function updateBrew(dt){
     b.t += dt / 0.55;
     if(b.t >= 1){
       b.state = 2; brew.landed++;
+      brew.count[b.kind] = (brew.count[b.kind] || 0) + 1;
       brew.target = hexRgb(ING[b.kind].col);
       sfx.splash();
-      say('n' + brew.landed);
+      say(`c-${b.kind}-${brew.count[b.kind]}`);
       for(let j = 0; j < 12; j++) parts.push({x: c.x + rand(-8, 8), y: mouth, vx: rand(-40, 40), vy: rand(-90, -40), g: 220, life: 0.7, max: 0.7, c: rgbStr(brew.target), s: rand(1, 2)});
       if(brew.landed === brew.basket.length){
         brew.phase = 'stir';
@@ -637,6 +656,15 @@ function updateBrew(dt){
   }
   if(brew.phase === 'stir'){
     if(brew.stir - brew.stirSound > 140){ brew.stirSound = brew.stir; sfx.bubble(); }
+    const lit = Math.min(STIR_STARS, Math.floor(brew.stir / STIR_NEEDED * STIR_STARS));
+    while(brew.lit < lit){   // the next star lights up, with a chime a little higher each time
+      const p = stirStar(brew.lit);
+      brew.litAt[brew.lit] = time;
+      tone(660 * 2 ** (brew.lit * 2 / 12), 660 * 2 ** (brew.lit * 2 / 12), 0.25, 'triangle', 0.35);
+      for(let j = 0; j < 10; j++){ const a = rand(0, Math.PI * 2), v = rand(15, 35);
+        parts.push({x: p.x, y: p.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.5, max: 0.5, c: pick(['#fff3a0', '#ffd447', '#ffffff']), s: 1.5, star: true}); }
+      brew.lit++;
+    }
     if(brew.stir >= STIR_NEEDED){
       brew.phase = 'magic'; brew.magicT = 0;
       sfx.poof(); say('magic-' + (L + 1));
@@ -955,13 +983,16 @@ function drawBrew(){
     emoji('👆', p.x + 6, p.y + 22 + Math.sin(time * 6) * 3, 14);
   }
   if(brew.phase === 'stir'){
-    ctx.save(); ctx.translate(c.x, mouth - 34); ctx.rotate(time * 3);
-    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 1.6); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(10, -1); ctx.lineTo(6, 4); ctx.lineTo(14, 4); ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(c.x - 25, c.y + 22, 50, 4);
-    ctx.fillStyle = '#ffd447'; ctx.fillRect(c.x - 25, c.y + 22, 50 * clamp(brew.stir / STIR_NEEDED, 0, 1), 4);
+    for(let i = 0; i < STIR_STARS; i++){
+      const p = stirStar(i), on = i < brew.lit, age = on ? time - brew.litAt[i] : 1;
+      const r = 5.5 * (1 + (age < 0.3 ? 0.7 * (1 - age / 0.3) : 0)) + (on ? Math.sin(time * 5 + i) * 0.4 : 0);
+      if(on){ ctx.fillStyle = 'rgba(255,230,120,.35)'; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.6, 0, 7); ctx.fill(); }
+      starPath(p.x, p.y, r);
+      ctx.fillStyle = on ? '#ffd447' : 'rgba(236,228,255,.75)'; ctx.fill();
+      ctx.lineWidth = 0.75; ctx.strokeStyle = on ? '#b77b12' : 'rgba(80,60,130,.8)'; ctx.stroke();
+    }
+    // a finger going round the pot shows how to stir, until the stirring gets going
+    if(!down && brew.stir < STIR_NEEDED * 0.6) emoji('👆', c.x + Math.cos(time * 4) * 16, mouth + 12 + Math.sin(time * 4) * 5, 14);
   }
 }
 
