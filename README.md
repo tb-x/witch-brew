@@ -29,8 +29,9 @@ match the pictures.
   a moment she can fly straight through things.
 - From level 3 things she doesn't want float about too: a smelly sock, an old shoe, and later a
   smelly fish and a slimy snail. Catch one and she bats it away: "A smelly sock? No thanks!"
-- Missed an ingredient? More keep coming until the recipe is complete. Then "That's everything!
-  Fly home!" and she glides down to her cottage.
+- Each level is a flight of about a minute (longer on later levels), with the ingredients spread out
+  along the way. Missed one? It comes round again near the end, and the level goes on until the
+  recipe is complete. Then "That's everything! Fly home!" and she glides down to her cottage.
 - At the cauldron: tap to throw the ingredients in one by one (the voice counts them again, "First
   snowflake!"), then stir by rubbing round and round on the screen (tapping works too; a finger
   circling the pot shows how). Five stars arch over the pot and light up one by one with a chime;
@@ -40,13 +41,15 @@ match the pictures.
 - The broom always carries every friend earned so far, on every level and on the title screen,
   and each friend helps her fly:
   - the **cat** pulls nearby ingredients in towards the broom;
-  - the **frog**'s tongue grabs an ingredient that's a little out of reach, every few seconds;
+  - the **frog** opens its mouth and shoots out its tongue to grab an ingredient that's a little out
+    of reach, every few seconds, reeling it back in on the tip;
   - the **pumpkin lantern** glows, and lights up the dark night level around her;
   - the **owl** hoots and puts a bouncing yellow arrow over the next ingredient she needs (or at the
     edge of the screen when it's still on its way);
   - the **stars** circle her, and carry her safely through the next thing she'd bump into ("Whoosh!
     The stars keep you safe!"), then come back a few seconds later;
-  - the **unicorn** gives her a rainbow dash every now and then: she flies faster, straight through
+  - the **unicorn** flies about round her on its own, galloping through the air, and gives her a
+    rainbow dash every now and then: she flies faster, straight through
     everything.
 - Special things to catch: a **shooting star** makes her zoom along, sparkling and flying through
   everything ("Zoom! Super fast!"), and a **bubble** wraps her up and floats her gently upwards
@@ -92,7 +95,9 @@ At the top of the script in `index.html`:
 | `ASSIST`, `ASSIST_RANGE` | The gentle pull towards the middle of the next gap (0 = off) and how far ahead it starts |
 | `HIT_R`, `PICK_R` | How close she must get to bump something (small = forgiving), and to catch an ingredient (big = easy) |
 | `OOPS_TIME`, `SAFE_TIME` | How long she spins after a bump, and how long she can then fly through things |
-| `ITEM_CHANCE`, `DECOY_CHANCE` | How often an ingredient appears between obstacles, and how often a sock or shoe does instead |
+| `DECOY_CHANCE` | How often something to avoid appears between obstacles where there's no ingredient |
+| `TONGUE_TIME` | Seconds for the frog's tongue to shoot out and reel an ingredient in |
+| `UNICORN_EVERY` | About how often the unicorn picks a new place to fly to round the witch |
 | `STIR_NEEDED`, `STIR_TAP`, `STIR_STARS` | How much stirring finishes the potion, how much one tap counts, and how many stars light up on the way |
 | `MAGIC_TIME` | How long the potion's magic plays before the end card |
 | `CAT_REACH`, `CAT_PULL` | How far beyond catching distance the cat pulls ingredients in, and how fast |
@@ -112,7 +117,7 @@ At the top of the script in `index.html`:
 | `ING`, `DECOYS` | The ingredients (emoji, picture, words, potion colour) and the things to avoid |
 | `FRIENDS` | The friend each level adds, its picture and where it sits on the broom (in pixels of the witch's picture) |
 | `RIDER` | Where the witch's body is in her picture, and how high the broom is in each animation frame, so the friends bob with it |
-| `LEVELS` | Per level: sky colours, recipe, `speed`, `gap` (height of the gaps), `decoys` (which things to avoid), `moving` (share of gaps that bob), `wind`, `flock` (birds or bats), `dark`, `specials` (shooting stars and bubbles), the extra `magic`, and `art`: its background strips (`far`, `near`, and `soil`, the colour under them) and its obstacles: a `cap` at the gap, a `body` stacked down to the ground (`bodyStep` makes it a wobbly pile), and a `top` piled up into the sky (`topStep` apart). The other colours are only used while the pictures load |
+| `LEVELS` | Per level: sky colours, recipe, `speed`, `gap` (height of the gaps), `length` (obstacles before the cottage, 14 on level 1 up to 24 on level 6; the ingredients are spread evenly along the way), `decoys` (which things to avoid), `moving` (share of gaps that bob), `wind`, `flock` (birds or bats), `dark`, `specials` (shooting stars and bubbles), the extra `magic`, and `art`: its background strips (`far`, `near`, and `soil`, the colour under them) and its obstacles: a `cap` at the gap, a `body` stacked down to the ground (`bodyStep` makes it a wobbly pile), and a `top` piled up into the sky (`topStep` apart). The other colours are only used while the pictures load |
 | `LINES` | Every spoken line (its clip is `assets/say-<key>.mp3`; the text is for the device's voice if the clip can't load) |
 
 ## The plan from here
@@ -140,24 +145,37 @@ which is no longer in the game. The untouched originals are in `art-src/`; `pyth
 - `assets/witch-fly.png`: the witch in a green dress and purple hat on a long broom, 8 frames of
   her flying (she bobs and blinks), side by side. Made from `art-src/witch-a.png` (one of two tries;
   `witch-b.png` isn't used) with `animate_image`; the frames are in `art-src/frames/`.
-- Her friends: `assets/cat.png` (8 frames of the cat swishing its tail and blinking, also made with
-  `animate_image`), `frog-crown.png`, `lantern.png`, `owl.png` and `unicorn.png` (mirrored by the
-  script, as it faced left). The script shrinks them all to 65% (`FRIEND_SIZE`) so they don't crowd
+- Her friends: `assets/cat.png` (8 frames of the cat swishing its tail and blinking),
+  `frog-crown.png` (7 frames: sitting still, then opening its mouth and flicking its tongue; the long
+  tongue that reaches the ingredient is drawn in code), `unicorn.png` (8 frames of it galloping
+  through the air, mirrored by the script as it faced left), `lantern.png` and `owl.png`. The
+  animations were made with `animate_image`, their frames are in `art-src/frames/`. The script shrinks them all to 65% (`FRIEND_SIZE`) so they don't crowd
   the witch, snapping every pixel back to the picture's own colours so they stay crisp.
-- `assets/cottage.png`, `assets/cauldron.png`: the witch's cottage (the chimney smoke is drawn in
-  code) and an empty cauldron (the potion inside, the fire under it and the spoon are drawn in code).
+- `assets/cottage.png`: the witch's cottage, stone and timber with a curly purple roof and pumpkins
+  by the door (`art-src/cottage2-b.png`, the second of two tries; the first cottage, `cottage.png`
+  and `cottage2-a.png` aren't used). The chimney smoke is drawn in code.
+- `assets/cauldron.png`: 8 frames of a big black cauldron of green potion bubbling on a fire of logs
+  and stones (made from `art-src/cauldron-fire-a.png` with `animate_image`; the earlier empty pot and
+  `cauldron-fire-b.png` aren't used). The game paints the potion the colour of the last ingredient
+  (in 'color' mode, so the bubbles still show) and draws the spoon.
 - Ingredients, `assets/ing-<name>.png`: flower, mushroom, berry (blueberries), leaf (maple), apple,
   feather, snow (snowflake), star, moon and drop (water drop); one picture each. The flower also
   grows all over the meadow at the end of level 1.
 - Things to avoid: `assets/sock.png`, `shoe.png`, `fish.png` (a smelly green fish skeleton) and
   `snail.png` (a slimy snail).
-- `assets/comet.png`: the shooting star that makes her zoom. Bubbles, birds and bats are drawn in code.
+- `assets/comet.png`: the shooting star that makes her zoom. Bubbles are drawn in code.
+- `assets/bird.png` and `bat.png`: 6 frames each of a little bluebird and a purple bat flapping (the
+  bat mirrored to fly left), for the flocks.
 - Level 1: `assets/bg-meadow-far.png` (distant hills) and `bg-meadow-near.png` (grass and flowers
   along the bottom), each shown next to its mirror image so it repeats without a seam;
-  `crown-meadow.png` (the leaves cropped off a whole tree), `bark-oak.png` (stacked up each trunk)
-  and `cloud.png` (piled up for the hanging obstacles, and small and see-through far away).
+  the oak tree in three pieces cut from one whole tree (`art-src/tree-oak.png`, made on a white
+  background that the script clears): `oak-top.png` (the crown with the top of the trunk),
+  `oak-trunk.png` (a slice of trunk stacked down to the ground) and `oak-foot.png` (the roots), so the
+  trunk always runs straight into the crown; and `cloud.png` (piled up for the hanging obstacles, and small and see-through far away).
 - Level 2: `bg-forest-far.png` (a fir forest) and `bg-forest-near.png` (ferns and mushrooms);
-  `fir.png` (without its stump) on `bark-dark.png`, and `vines.png` (hanging moss).
+  a fir cut the same way from `art-src/tree-fir.png` (`fir-top.png`, `fir-trunk.png`, `fir-foot.png`),
+  and `vines.png` (hanging moss). (The earlier crowns and bark textures in `art-src/`, `crown.png`,
+  `bark.png`, `fir.png` and `bark-dark.png`, aren't used.)
 - Level 3: `bg-autumn-far.png` (sunset fields with a red barn; its stripy sky stays, the sun is
   painted over with its band's colour, and the level's sky matches its top) and `bg-autumn-near.png`
   (a pumpkin patch); `hay-top.png` (a round hay bale with a pumpkin) on a wobbly pile of

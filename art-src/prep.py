@@ -10,6 +10,7 @@ from PIL import Image
 
 SRC = Path(__file__).resolve().parent
 OUT = SRC.parent / 'assets'
+TREE_SIZE = 0.6     # the whole trees are shrunk to this size
 FRIEND_SIZE = 0.65   # the broom friends are shrunk to this size, so they don't crowd the witch
 NEAR_SOLID = 80   # the near strips are cropped so their first solid row (the grass line) is this far down
 
@@ -135,6 +136,58 @@ def shrink(im, k):
     return small
 
 
+def frames(name, count, k=1, flip=False):
+    """An animation's frames from art-src/frames (frame 0 is the picture it was made from)."""
+    out = []
+    for i in range(count):
+        f = Image.open(SRC / 'frames' / f'{name}-{i}.png').convert('RGBA')
+        if k != 1:
+            f = shrink(f, k)
+        if flip:
+            f = f.transpose(Image.FLIP_LEFT_RIGHT)
+        out.append(f)
+    return out
+
+
+def cut_white(im, tol=20):
+    """Clear a plain white background, flood-filling in from the edges."""
+    w, h = im.size
+    px = im.load()
+    todo = deque([(x, 0) for x in range(w)] + [(x, h - 1) for x in range(w)] + [(0, y) for y in range(h)] + [(w - 1, y) for y in range(h)])
+    seen = set()
+    while todo:
+        x, y = todo.popleft()
+        if (x, y) in seen or not (0 <= x < w and 0 <= y < h):
+            continue
+        seen.add((x, y))
+        if min(px[x, y][:3]) < 255 - tol:
+            continue
+        px[x, y] = (0, 0, 0, 0)
+        todo.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+    for y in range(h):   # and the bits of background showing through between branches
+        for x in range(w):
+            if min(px[x, y][:3]) > 245:
+                px[x, y] = (0, 0, 0, 0)
+    return im
+
+
+def tree(im, k, cap_end, body_end, name):
+    """Cut a whole tree into its top (crown and the top of the trunk), a slice of trunk that the game stacks
+    down to the ground, and its foot (the roots). All three keep the full width, so they line up."""
+    im = shrink(im, k)
+    w, h = im.size
+    top = im.getchannel('A').getbbox()[1]
+    a, b = round(cap_end * k), round(body_end * k)
+    save(im.crop((0, top, w, a)), f'{name}-top')
+    save(im.crop((0, a, w, b)), f'{name}-trunk')
+    save(trim_bottom(im.crop((0, b, w, h))), f'{name}-foot')
+
+
+def trim_bottom(im):
+    box = im.getchannel('A').getbbox()
+    return im.crop((0, 0, im.width, box[3]))
+
+
 def centre(im, width):
     x = (im.width - width) // 2
     return im.crop((x, 0, x + width, im.height))
@@ -148,12 +201,15 @@ def save(im, name):
 
 # the witch and her friends
 save(sheet([Image.open(SRC / 'frames' / f'witch-{i}.png').convert('RGBA') for i in range(8)]), 'witch-fly')
-save(sheet([shrink(Image.open(SRC / 'frames' / f'cat-{i}.png').convert('RGBA'), FRIEND_SIZE) for i in range(8)]), 'cat')
-for n in ('frog-crown', 'lantern', 'owl'):
+save(sheet(frames('cat', 8, FRIEND_SIZE)), 'cat')
+save(sheet(frames('frog', 7, FRIEND_SIZE)), 'frog-crown')                     # frame 0 sits still; 1-6 flick the tongue
+save(sheet(frames('unicorn', 8, FRIEND_SIZE, flip=True)), 'unicorn')        # it faced left; it flies to the right
+save(sheet(frames('bird', 6)), 'bird')
+save(sheet(frames('bat', 6, flip=True)), 'bat')                             # it faced right; the flocks fly left
+save(sheet(frames('cauldron', 8)), 'cauldron')
+for n in ('lantern', 'owl'):
     save(shrink(trim(load(n)), FRIEND_SIZE), n)
-save(shrink(trim(load('unicorn')), FRIEND_SIZE).transpose(Image.FLIP_LEFT_RIGHT), 'unicorn')   # it faced left; it flies to the right
-save(trim(load('cottage')), 'cottage')
-save(trim(load('cauldron')), 'cauldron')
+save(trim(load('cottage2-b')), 'cottage')
 
 # ingredients and the things to avoid
 for n in ('flower', 'mushroom', 'berry', 'leaf', 'apple', 'feather', 'snow', 'star', 'moon', 'drop'):
@@ -162,11 +218,9 @@ for n in ('sock', 'shoe', 'fish', 'snail', 'comet'):
     save(trim(load(n)), n)
 
 # obstacles: a cap at the gap, a body stacked down to the ground, and a pile hanging from the sky
-save(trim(load('crown').crop((0, 0, 160, 86))), 'crown-meadow')      # leaves only, off a whole tree
-save(trim(load('bark')), 'bark-oak')
+tree(cut_white(load('tree-oak')), TREE_SIZE, 184, 208, 'oak')
 save(trim(load('cloud')), 'cloud')
-save(trim(load('fir').crop((0, 0, 128, 112))), 'fir')                 # without its stump
-save(trim(load('bark-dark')), 'bark-dark')
+tree(load('tree-fir'), TREE_SIZE, 200, 232, 'fir')
 save(trim(load('vines')), 'vines')
 save(trim(load('hay-top')), 'hay-top')
 save(trim(load('hay-top').crop((0, 30, 96, 85))), 'hay-bale')         # the bale without its pumpkin
