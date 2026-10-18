@@ -200,7 +200,28 @@ def save(im, name):
 
 
 # the witch and her friends
-save(sheet([Image.open(SRC / 'frames' / f'witch-{i}.png').convert('RGBA') for i in range(8)]), 'witch-fly')
+# The witch's animations all share one crop box, so her body, broom and friends stay put whichever plays:
+# flying (8 frames, a loop), and swoop, cheer, wave and bonk (frames 1-6 of each; frame 0 is the flying pose).
+WITCH_ANIMS = {'fly': [f'witch-{i}' for i in range(8)]}
+for n in ('swoop', 'cheer', 'wave', 'bonk'):
+    if (SRC / 'frames' / f'witch-{n}-1.png').exists():
+        WITCH_ANIMS[n] = [f'witch-{n}-{i}' for i in range(1, 7)]
+wf = {n: [Image.open(SRC / 'frames' / f'{f}.png').convert('RGBA') for f in fs] for n, fs in WITCH_ANIMS.items()}
+boxes = [f.getchannel('A').getbbox() for fs in wf.values() for f in fs]
+WBOX = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+print('   witch crop box', WBOX)
+for n, fs in wf.items():
+    w, h = WBOX[2] - WBOX[0], WBOX[3] - WBOX[1]
+    out = Image.new('RGBA', (w * len(fs), h), (0, 0, 0, 0))
+    broom = []
+    for i, f in enumerate(fs):
+        c = f.crop(WBOX)
+        out.alpha_composite(c, (i * w, 0))
+        px = c.load(); x = 85 + 11 - WBOX[0]   # the broom handle in front of her
+        col = [y for y in range(h) if px[x, y][3] and px[x, y][0] > 80 and px[x, y][0] > px[x, y][2] + 30 and px[x, y][1] < px[x, y][0]]
+        broom.append(min(col) if col else None)
+    save(out, f'witch-{n}')
+    print(f'   witch-{n} broom tops', broom)
 save(sheet(frames('cat', 8, FRIEND_SIZE)), 'cat')
 save(sheet(frames('frog', 7, FRIEND_SIZE)), 'frog-crown')                     # frame 0 sits still; 1-6 flick the tongue
 save(sheet(frames('unicorn', 8, FRIEND_SIZE, flip=True)), 'unicorn')        # it faced left; it flies to the right

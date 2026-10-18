@@ -20,8 +20,10 @@ match the pictures.
 
 - Pick a level (the next one opens when you finish one). A voice says what to find: "Find two
   mushrooms and two blueberries!" The recipe is shown as pictures at the top of the screen.
-- Tap anywhere (or press space) and the witch swoops up; let go and she glides gently down. If she
-  touches the ground she just bounces back up.
+- Tap anywhere (or press space) and the witch leans forward and swoops up; let go and she glides
+  gently down. If she touches the ground she just bounces back up. She cheers when she catches
+  something, grabs her hat when she bumps into something, and laughs and waves when a new friend
+  jumps onto her broom.
 - Fly into an ingredient to catch it: it flies up into the recipe and the voice counts it in a
   little sentence ("First snowflake!", "Second snowflake!"). Extra ones you don't need just sparkle.
 - Trees, clouds and rocks stand in the way with wide gaps between them, and the witch is gently
@@ -88,6 +90,7 @@ At the top of the script in `index.html`:
 | `RES` | Picture pixels per game unit (the PixelLab pictures are made for 2) |
 | `ASSET_V` | Bump after changing any picture or sound in `assets/`, so browsers fetch the new one |
 | `WITCH_FPS` | Speed of the witch's flying animation (the cat's is three quarters of it) |
+| `RIDER` | The witch's animations: frames, speed, and where the broom is in each frame so her friends ride along; `ACT_RANK` says which one wins when two are asked for at once (a bump beats a cheer, which beats a swoop) |
 | `GRAVITY`, `FLAP`, `MAX_FALL` | How fast she drops, how high a tap lifts her, and her slowest-possible glide |
 | `SPEED` | Flying speed (each level multiplies it by its `speed`) |
 | `PILLAR_EVERY`, `PILLAR_W` | Distance between obstacles, and how wide they are |
@@ -142,9 +145,14 @@ two animations with `animate_image`. They were all made at twice the size of an 
 which is no longer in the game. The untouched originals are in `art-src/`; `python art-src/prep.py`
 (run from this folder) cuts them out, crops and trims them into `assets/` (then bump `ASSET_V`).
 
-- `assets/witch-fly.png`: the witch in a green dress and purple hat on a long broom, 8 frames of
-  her flying (she bobs and blinks), side by side. Made from `art-src/witch-a.png` (one of two tries;
-  `witch-b.png` isn't used) with `animate_image`; the frames are in `art-src/frames/`.
+- The witch in a green dress and purple hat on a long broom, made from `art-src/witch-a.png` (one of
+  two tries; `witch-b.png` isn't used), animated with `animate_image` (frames in `art-src/frames/`) and
+  cut by the script to one shared size so she and her friends never jump between animations:
+  `assets/witch-fly.png` (8 frames looping: she bobs and blinks), `witch-swoop.png` (she leans into
+  each tap and rises), `witch-cheer.png` (a fist in the air when she catches something),
+  `witch-wave.png` (laughing and waving when a new friend lands on her broom; it was asked for as a
+  dizzy look, but came out happy) and `witch-bonk.png` (holding her hat with both hands, "Oh!", after
+  a bump). Each of the last four is 6 frames played once.
 - Her friends: `assets/cat.png` (8 frames of the cat swishing its tail and blinking),
   `frog-crown.png` (7 frames: sitting still, then opening its mouth and flicking its tongue; the long
   tongue that reaches the ingredient is drawn in code), `unicorn.png` (8 frames of it galloping

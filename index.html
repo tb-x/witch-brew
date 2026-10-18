@@ -85,7 +85,7 @@
 <script>
 'use strict';
 /* ======== tuning knobs ======== */
-const ASSET_V = 6;           // bump after changing any picture or sound in assets/
+const ASSET_V = 7;           // bump after changing any picture or sound in assets/
 const VIEW_MIN = 180;        // at least this many game units across the short side of the screen (smaller = bigger witch)
 const RES = 2;               // picture pixels per game unit (the PixelLab pictures are drawn at this size)
 const CEIL = 8;              // soft ceiling, units below the top edge
@@ -160,16 +160,24 @@ const DECOYS = {
 // flying picture, in picture pixels: the middle of its feet (or, for the hanging lantern, the middle of its top);
 // the frog's `mouth` is in game units from its feet. The unicorn flies on its own; stars and the rainbow are trails.
 const FRIENDS = [
-  {name:'cat',     img:'cat', frames:8, x:22, y:70, behind:true, emoji:'🐈‍⬛'},
-  {name:'frog',    img:'frog-crown', frames:7, still:true, x:88, y:62, mouth:[2.5, -5.5], emoji:'🐸'},
-  {name:'lantern', img:'lantern', x:103, y:60, hang:true, emoji:'🎃'},
-  {name:'owl',     img:'owl', x:66, y:27, emoji:'🦉'},
+  {name:'cat',     img:'cat', frames:8, x:23, y:70, behind:true, emoji:'🐈‍⬛'},
+  {name:'frog',    img:'frog-crown', frames:7, still:true, x:89, y:62, mouth:[2.5, -5.5], emoji:'🐸'},
+  {name:'lantern', img:'lantern', x:104, y:60, hang:true, emoji:'🎃'},
+  {name:'owl',     img:'owl', x:67, y:27, emoji:'🦉'},
   {name:'stars',   trail:'stars', emoji:'✨'},
   {name:'unicorn', img:'unicorn', frames:8, trail:'rainbow', emoji:'🦄'},
 ];
-// the witch's flying picture (assets/witch-fly.png, 8 frames): where her body is, and how high the broom
-// sits in each frame (so her passengers bob with it), in picture pixels
-const RIDER = {frames: 8, body: [52, 62], broom: [61, 61, 60, 58, 58, 58, 58, 59], trail: [6, 80]};
+// The witch's pictures (assets/witch-<anim>.png, all cut the same size): where her body and the end of her broom
+// are, in picture pixels, and per animation its frames, speed, and how high the broom sits in each frame (so her
+// passengers ride along with it). `fly` loops; the others play once when something happens, then she flies on.
+const RIDER = {body: [53, 62], trail: [7, 80], anims: {
+  fly:   {frames: 8, fps: WITCH_FPS, loop: true, broom: [61, 61, 60, 58, 58, 58, 58, 59]},
+  swoop: {frames: 6, fps: 14, broom: [61, 58, 56, 58, 61, 64]},   // leaning into a tap
+  cheer: {frames: 6, fps: 10, broom: [62, 59, 58, 57, 58, 61]},   // a fist in the air for an ingredient
+  wave:  {frames: 6, fps: 8,  broom: [61, 61, 63, 64, 64, 63]},   // laughing and waving at a new friend
+  bonk:  {frames: 6, fps: 7,  broom: [62, 64, 66, 65, 64, 62]},   // holding her hat after a bump
+}};
+const ACT_RANK = {fly: 0, swoop: 1, cheer: 2, wave: 2, bonk: 3};   // a bump outranks a cheer, which outranks a swoop
 
 // sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours (the simple look,
 // used until the pictures load). art: the level's PixelLab pictures: `far` and `near` background strips,
@@ -426,7 +434,7 @@ function loadArt(names){
     im.src = `assets/${n}.png?v=${ASSET_V}`;
   }
 }
-loadArt(['witch-fly', 'cottage', 'cauldron', 'comet', 'bird', 'bat', ...Object.values(DECOYS).map(d => d.img), ...FRIENDS.filter(f => f.img).map(f => f.img),
+loadArt([...Object.keys(RIDER.anims).map(n => 'witch-' + n), 'cottage', 'cauldron', 'comet', 'bird', 'bat', ...Object.values(DECOYS).map(d => d.img), ...FRIENDS.filter(f => f.img).map(f => f.img),
   ...Object.values(ING).map(i => i.img),
   ...LEVELS.flatMap(l => Object.entries(l.art || {}).filter(([k]) => ['far', 'near', 'cap', 'body', 'foot', 'top'].includes(k)).map(([, v]) => v))]
   .filter((n, i, a) => a.indexOf(n) === i));
@@ -444,7 +452,14 @@ function frameOf(im, count, i, x, y){
 const params = new URLSearchParams(location.search);
 let L = 0, lv = LEVELS[0], state = 'menu';
 let cam = 0, spd = 0, fade = 0, time = 0;
-const witch = {y: 90, vy: 0, ang: 0, oops: 0, safe: 0, t: 0, trail: 0};
+const witch = {y: 90, vy: 0, ang: 0, oops: 0, safe: 0, t: 0, trail: 0, anim: {name: 'fly', t: 0}};
+// play one of the witch's animations, unless a more important one is playing
+function act(name){
+  const cur = witch.anim, a = RIDER.anims[cur.name];
+  if(!ART['witch-' + name]) return;
+  if(cur.name !== 'fly' && cur.t * a.fps < a.frames && ACT_RANK[cur.name] > ACT_RANK[name]) return;
+  witch.anim = {name, t: 0};
+}
 let pillars = [], items = [], parts = [], flyers = [], flocks = [], flockT = 0;
 let pillarN = 0, plan = new Set(), allGot = false, frameDt = 0;
 const uni = {ox: -46, oy: -8, vx: 0, vy: 0, tx: -46, ty: -8, next: 0, face: 1};   // the unicorn, relative to the witch
@@ -478,7 +493,7 @@ function startLevel(i){
   const n = total() - 1;
   plan = new Set(Array.from({length: n}, (_, j) => 1 + Math.floor((j + 0.5) * (lv.length - 3) / n)));
   Object.assign(witch, {y: CEIL + band() / 2, vy: 0, ang: 0, oops: 0, safe: 0, t: 0,
-    zoom: 0, bubble: 0, dash: 0, dashT: DASH_EVERY, shield: 0, frogT: 1, tongue: null, owlT: 1.5, hint: null,
+    anim: {name: 'fly', t: 0}, zoom: 0, bubble: 0, dash: 0, dashT: DASH_EVERY, shield: 0, frogT: 1, tongue: null, owlT: 1.5, hint: null,
     windT: WIND_EVERY, wind: 0, windDir: 1});
   flocks = []; flockT = FLOCK_EVERY * 0.5;
   nextX = Math.max(vw + 30, vw * WITCH_X + 170);
@@ -532,7 +547,7 @@ function hits(p, x, y){
 }
 
 function flap(){
-  witch.vy = -FLAP; sfx.flap();
+  witch.vy = -FLAP; sfx.flap(); act('swoop');
   const x = witchX() - 18, y = witch.y + 6;
   for(let i = 0; i < 4; i++) parts.push({x, y, vx: rand(-30, -10), vy: rand(10, 30), life: 0.4, max: 0.4, c: 'rgba(255,255,255,.8)', s: rand(1, 2)});
 }
@@ -541,7 +556,7 @@ function oops(p){
   witch.oops = OOPS_TIME; witch.safe = SAFE_TIME;
   spd = -30;
   witch.vy = gapCentre(p) > witch.y ? 40 : -70;
-  sfx.bump();
+  sfx.bump(); act('bonk');
   if(Math.random() < 0.6) say(pick(['oops', 'whoops', 'bump']));
   for(let i = 0; i < 8; i++) parts.push({x: witchX(), y: witch.y - 8, vx: rand(-40, 40), vy: rand(-50, 0), g: 120, life: 0.7, max: 0.7, c: '#ffe066', s: rand(1, 2)});
 }
@@ -563,6 +578,7 @@ function take(it){
   if(it.special){
     const y = CEIL + it.fy * band();
     for(let i = 0; i < 16; i++) parts.push({x: it.x, y, vx: rand(-50, 50), vy: rand(-50, 50), life: 0.7, max: 0.7, c: pick(['#fff3a0', '#ffd447', '#bfe9ff', '#ffffff']), s: 2, star: true});
+    act('cheer');
     if(it.special === 'comet'){ witch.zoom = ZOOM_TIME; sfx.poof(); say('zoom'); }
     else { witch.bubble = BUBBLE_TIME; sfx.bubble(); say('bubble'); }
     return;
@@ -576,7 +592,7 @@ function take(it){
   got[k]++;
   const slot = hudSlots().find(s => s.kind === k && s.i === got[k] - 1);
   flyers.push({kind: k, x0: (it.x - cam) * scale, y0: (CEIL + it.fy * band()) * scale, x1: slot.x, y1: slot.y, s1: slot.s, t: 0});
-  sfx.pick();
+  sfx.pick(); act('cheer');
   say(`c-${k}-${got[k]}`);
   for(let i = 0; i < 8; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: '#fff6a8', s: 1.5});
   if(Object.keys(lv.recipe).every(k2 => got[k2] >= lv.recipe[k2])) allGot = true;   // she flies on to the end of the level, then home
@@ -840,7 +856,7 @@ function updateBrew(dt){
     }
     if(brew.stir >= STIR_NEEDED){
       brew.phase = 'magic'; brew.magicT = 0;
-      sfx.poof(); say('magic-' + (L + 1));
+      sfx.poof(); say('magic-' + (L + 1)); act('cheer');
       for(let j = 0; j < 40; j++){ const a = rand(0, Math.PI * 2), v = rand(30, 110);
         parts.push({x: c.x, y: mouth - 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, g: 40, life: 1.2, max: 1.2, c: `hsl(${rand(0, 360)},90%,70%)`, s: rand(1, 2.5)}); }
     }
@@ -857,7 +873,7 @@ function updateBrew(dt){
         const w = brewWitch(), [tx, ty] = trailAt(w.x, w.y), u = rand(0, 1);
         parts.push({x: lerp(c.x, tx, u), y: lerp(mouth, ty, u) - Math.sin(u * Math.PI) * 30, vx: rand(-10, 10), vy: rand(-10, 10), life: 0.8, max: 0.8, c: pick(['#fff3a0', '#ffd447']), s: 2, star: true});
       }
-      if(brew.friendT >= 1){ brew.friendIn = true; sfx.pick(); }
+      if(brew.friendT >= 1){ brew.friendIn = true; sfx.pick(); act('wave'); }
     }
     if(brew.friendIn){ const w = brewWitch(), [tx, ty] = trailAt(w.x, w.y); broomTrail(dt, tx, ty, -30); }
     if(lv.magic === 'fireworks' && (brew.fw -= dt) < 0){
@@ -1036,12 +1052,15 @@ function drawRider(x, y, ang, alpha = 1){
   ctx.globalAlpha = alpha;
   if(friendShown(5)){ flyUnicorn(frameDt, x, y); drawFriend(5, x + uni.ox, y + uni.oy); }   // the unicorn flies round her on its own
   if(!im){ drawStickWitch(x, y, ang); ctx.globalAlpha = 1; return; }
-  const fr = Math.floor(time * WITCH_FPS) % RIDER.frames, bob = (RIDER.broom[fr] - RIDER.broom[0]) / RES;
+  let an = RIDER.anims[witch.anim.name], fr = Math.floor(witch.anim.t * an.fps);
+  if(!an.loop && fr >= an.frames){ witch.anim = {name: 'fly', t: 0}; an = RIDER.anims.fly; }   // back to flying
+  if(an.loop) fr = Math.floor(time * an.fps) % an.frames;
+  const bob = (an.broom[fr] - RIDER.anims.fly.broom[0]) / RES, sheet = ART['witch-' + witch.anim.name] || im;
   const ox = -RIDER.body[0] / RES, oy = -RIDER.body[1] / RES;
   ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.round(ang / 0.06) * 0.06);   // tilt in whole steps so the pixels stay tidy
   const spot = i => [ox + FRIENDS[i].x / RES, oy + FRIENDS[i].y / RES + bob];
   FRIENDS.forEach((f, i) => { if(f.behind && f.img && friendShown(i)) drawFriend(i, ...spot(i)); });
-  frameOf(im, RIDER.frames, fr, ox, oy);
+  frameOf(sheet, an.frames, fr, ox, oy);
   FRIENDS.forEach((f, i) => { if(!f.behind && f.img && f.name !== 'unicorn' && friendShown(i)) drawFriend(i, ...spot(i)); });
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -1268,6 +1287,8 @@ function drawHud(){
 let last = performance.now();
 function frame(now){
   const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt; frameDt = dt;
+  witch.anim.t += dt;
+  if(state === 'menu' && Math.random() < dt * 0.4) act(pick(['wave', 'cheer', 'swoop']));   // showing off on the title screen
   if(state === 'menu'){
     cam += 18 * dt;
     const [tx, ty] = trailAt(vw * 0.5 + Math.sin(time * 0.7) * vw * 0.3, vh * 0.72 + Math.sin(time * 1.6) * 10);
