@@ -128,6 +128,7 @@ const UNICORN_EVERY = 3;     // the unicorn picks a new place to fly to (round t
 const MOVE_AMP = 14;         // how far a moving gap bobs up and down
 const WIND_EVERY = 7, WIND_TIME = 2, WIND_PUSH = 110;   // snowy gusts: how often, how long, how hard (units/s²)
 const FLOCK_EVERY = 9;       // seconds between flocks of birds or bats (they scatter when she flies into them)
+const FLOCK_ESCAPE = 190;    // how fast a startled bird or bat shoots off (units/s); it speeds up as it goes
 const SPECIAL_CHANCE = 0.12; // chance of a comet or bubble between two obstacles
 const ZOOM_TIME = 3, ZOOM_SPEED = 1.5;      // the comet: how long she zooms, and how much faster
 const BUBBLE_TIME = 2.5, BUBBLE_RISE = 26;  // the bubble: how long it carries her, and how fast it floats up
@@ -730,9 +731,10 @@ function updateFlocks(dt, wx){
     }
   }
   for(const b of flocks){
+    if(b.scared){ b.vx *= 1 + dt; b.vy -= FLOCK_ESCAPE * dt; }   // startled ones keep speeding up and away
     b.x += b.vx * dt; b.y += b.vy * dt + Math.sin(time * 3 + b.ph) * 4 * dt;
     if(!b.scared && Math.hypot(b.x - wx, b.y - witch.y) < 12){
-      for(const o of flocks) if(!o.scared && Math.hypot(o.x - b.x, o.y - b.y) < 40){ o.scared = true; o.vx = rand(-70, 50); o.vy = rand(-80, -30); }
+      for(const o of flocks) if(!o.scared && Math.hypot(o.x - b.x, o.y - b.y) < 70){ o.scared = true; o.vx = rand(-1, 0.7) * FLOCK_ESCAPE; o.vy = -rand(0.5, 1) * FLOCK_ESCAPE; }   // the whole flock bolts
       sfx.chirp();
     }
   }
@@ -1137,7 +1139,7 @@ function drawFlocks(){
   const im = ART[lv.flock === 'bats' ? 'bat' : 'bird'];
   if(!im) return;
   const w = uw(im) / 6, h = uh(im);
-  for(const b of flocks) frameOf(im, 6, Math.floor(time * 12 + b.ph * 3), b.x - cam - w / 2, b.y - h / 2);
+  for(const b of flocks) frameOf(im, 6, Math.floor(time * (b.scared ? 30 : 12) + b.ph * 3), b.x - cam - w / 2, b.y - h / 2);   // frantic flapping when startled
 }
 
 function drawParts(camX){

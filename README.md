@@ -108,7 +108,7 @@ At the top of the script in `index.html`:
 | `DASH_EVERY`, `DASH_TIME`, `DASH_SPEED` | The unicorn's rainbow dash: how often, how long, how much faster |
 | `MOVE_AMP` | How far a moving gap bobs up and down (each level's `moving` says how many gaps move) |
 | `WIND_EVERY`, `WIND_TIME`, `WIND_PUSH` | Snowy gusts: how often, how long, how hard |
-| `FLOCK_EVERY` | Seconds between flocks of birds or bats |
+| `FLOCK_EVERY`, `FLOCK_ESCAPE` | Seconds between flocks of birds or bats, and how fast they shoot off when she startles them |
 | `SPECIAL_CHANCE` | How often a shooting star or bubble appears between two obstacles |
 | `ZOOM_TIME`, `ZOOM_SPEED` | The shooting star: how long she zooms and how much faster |
 | `BUBBLE_TIME`, `BUBBLE_RISE` | The bubble: how long it carries her and how fast it floats up |
