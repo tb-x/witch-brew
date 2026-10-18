@@ -85,7 +85,7 @@
 <script>
 'use strict';
 /* ======== tuning knobs ======== */
-const ASSET_V = 4;           // bump after changing any picture or sound in assets/
+const ASSET_V = 5;           // bump after changing any picture or sound in assets/
 const VIEW_MIN = 180;        // at least this many game units across the short side of the screen (smaller = bigger witch)
 const RES = 2;               // picture pixels per game unit (the PixelLab pictures are drawn at this size)
 const CEIL = 8;              // soft ceiling, units below the top edge
@@ -111,6 +111,25 @@ const STIR_NEEDED = 900;     // screen pixels of stirring (dragging) to finish t
 const STIR_TAP = 150;        // a tap counts as this much stirring
 const STIR_STARS = 5;        // stars over the pot that light up one by one while you stir
 const MAGIC_TIME = 5;        // seconds the potion's magic plays before the end card
+// friends' powers: each one works once that friend rides the broom
+const CAT_REACH = 30;        // the cat pulls ingredients this much further than catching distance towards the broom
+const CAT_PULL = 70;         // ...this fast (units/s)
+const FROG_REACH = 50;       // the frog's tongue grabs an ingredient up to this far away...
+const FROG_EVERY = 3;        // ...once every this many seconds
+const LANTERN_LIGHT = 110;   // on the dark night level, how far the lantern lights up around her (60 without it)
+const NIGHT_DARK = 0.55;     // how dark the night level is outside that light (0 = not at all, 1 = black)
+const OWL_EVERY = 5;         // the owl hoots and points at the next ingredient this often (seconds)
+const STAR_RECHARGE = 8;     // the stars carry her through one obstacle, then need this many seconds to come back
+const DASH_EVERY = 15;       // the unicorn's rainbow dash comes this often (seconds)...
+const DASH_TIME = 2.5;       // ...lasts this long...
+const DASH_SPEED = 1.6;      // ...and makes her this much faster, flying through everything
+// moving things and special pickups (each level in LEVELS says which it has)
+const MOVE_AMP = 14;         // how far a moving gap bobs up and down
+const WIND_EVERY = 7, WIND_TIME = 2, WIND_PUSH = 110;   // snowy gusts: how often, how long, how hard (units/s²)
+const FLOCK_EVERY = 9;       // seconds between flocks of birds or bats (they scatter when she flies into them)
+const SPECIAL_CHANCE = 0.12; // chance of a comet or bubble between two obstacles
+const ZOOM_TIME = 3, ZOOM_SPEED = 1.5;      // the comet: how long she zooms, and how much faster
+const BUBBLE_TIME = 2.5, BUBBLE_RISE = 26;  // the bubble: how long it carries her, and how fast it floats up
 const SFX_VOL = 0.5;         // loudness of the sound effects
 const VOICE_VOL = 1;         // loudness of the voice (each clip is evened out first)
 const MUSIC_VOL = 0.28;      // loudness of the music
@@ -129,7 +148,10 @@ const ING = {
   moon:     {e:'🌙', one:'moon',       many:'moons',       col:'#ffe58a', img:'ing-moon'},
   drop:     {e:'💧', one:'water drop', many:'water drops', col:'#4fb3ff', img:'ing-drop'},
 };
-const DECOYS = [{e:'🧦', img:'sock', say:'sock'}, {e:'👟', img:'shoe', say:'shoe'}];
+const DECOYS = {
+  sock: {e:'🧦', img:'sock', say:'sock'}, shoe: {e:'👟', img:'shoe', say:'shoe'},
+  fish: {e:'🐟', img:'fish', say:'fish'}, snail: {e:'🐌', img:'snail', say:'snail'},
+};
 
 // The friend each level's potion adds to the broom, in order. `img` is its picture, `frames` how many
 // animation frames it has, and (x, y) where it sits in the witch's flying picture, in picture pixels:
@@ -151,25 +173,27 @@ const RIDER = {frames: 8, body: [52, 62], broom: [61, 61, 60, 58, 58, 58, 58, 59
 // `soil` (the colour under the near strip), and the obstacles: a `cap` at the gap, a `body` stacked from it
 // to the ground (`bodyStep` makes it a wobbly pile instead of a column), and a `top` piled up from the gap
 // into the sky, `topStep` apart. magic: what else happens when the potion is ready.
+// decoys: the things to avoid; moving: share of gaps that bob up and down; wind: snowy gusts;
+// flock: 'birds' or 'bats' fly across; dark: only the light round the witch shows; specials: comets and bubbles.
 const LEVELS = [
   {icon:'🌼', sky:['#bfe7ff','#f4fbe2'], hills:['#a6dc8f','#7cc66a'], ground:'#6bb35a',
    art:{far:'bg-meadow-far', near:'bg-meadow-near', soil:'#764d52', cap:'crown-meadow', body:'bark-oak', top:'cloud'},
-   bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96, magic:'flowers'},
+   bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96, magic:'flowers', flock:'birds'},
   {icon:'🌲', sky:['#a6e8c2','#c8f2c0'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
    art:{far:'bg-forest-far', near:'bg-forest-near', soil:'#051831', cap:'fir', body:'bark-dark', top:'vines', topStep:30},
-   bot:['#6b4428','#2f7a3a'], top:['#2f7a3a','#3d9447'], recipe:{mushroom:2, berry:2}, speed:1, gap:92},
+   bot:['#6b4428','#2f7a3a'], top:['#2f7a3a','#3d9447'], recipe:{mushroom:2, berry:2}, speed:1, gap:92, moving:0.25, flock:'birds', specials:['bubble']},
   {icon:'🎃', sky:['#9e8b94','#9e8b94'], hills:['#c98a4a','#8a6a2f'], ground:'#6b7a32',
    art:{far:'bg-autumn-far', near:'bg-autumn-near', soil:'#482a0a', cap:'hay-top', body:'hay-bale', bodyStep:22, top:'leaves-autumn', topStep:22},
-   bot:['#7a5230','#e07a2a'], top:['#b46a3a','#7a4a2a'], recipe:{leaf:2, apple:2, feather:1}, speed:1.05, gap:90, decoys:true},
+   bot:['#7a5230','#e07a2a'], top:['#b46a3a','#7a4a2a'], recipe:{leaf:2, apple:2, feather:1}, speed:1.05, gap:90, decoys:['sock', 'shoe'], moving:0.3, specials:['comet', 'bubble']},
   {icon:'⛄', sky:['#c6e4f5','#e4f1f7'], hills:['#e3eefa','#cfdff0'], ground:'#f2f7ff',
    art:{far:'bg-snow-far', near:'bg-snow-near', soil:'#9ab2be', cap:'rock-top', body:'rock', top:'cloud-snow', topStep:26},
-   bot:['#8d97a8','#ffffff'], top:['#c7e3ff','#ffffff'], recipe:{snow:3, berry:2}, speed:1.1, gap:88, decoys:true, magic:'snow'},
+   bot:['#8d97a8','#ffffff'], top:['#c7e3ff','#ffffff'], recipe:{snow:3, berry:2}, speed:1.1, gap:88, decoys:['sock', 'shoe', 'fish'], moving:0.3, wind:true, specials:['bubble'], magic:'snow'},
   {icon:'🌙', sky:['#060d24','#060d24'], hills:['#2b2f63','#1f2550'], ground:'#2a3358', night:true,
    art:{far:'bg-night-far', near:'bg-night-near', soil:'#030d1e', cap:'tower-roof', body:'tower', top:'cloud-night', topStep:24},
-   bot:['#3b3f6b','#59609a'], top:['#555c8f','#7a80b8'], recipe:{star:3, moon:1, drop:2}, speed:1.15, gap:88, decoys:true, magic:'fireworks'},
+   bot:['#3b3f6b','#59609a'], top:['#555c8f','#7a80b8'], recipe:{star:3, moon:1, drop:2}, speed:1.15, gap:88, decoys:['shoe', 'fish', 'snail'], moving:0.35, flock:'bats', dark:true, specials:['comet'], magic:'fireworks'},
   {icon:'🌈', sky:['#ecd8f5','#ecd8f5'], hills:['#ffe3f3','#e7f4ff'], ground:'#bdf0cc',
    art:{far:'bg-rainbow-far', near:'bg-rainbow-near', soil:'#756892', cap:'cloud-pink', body:'cloud-pink', bodyStep:18, top:'cloud-pink', topStep:20},
-   bot:['#ffffff','#fff3fb'], top:['#ffffff','#f3f9ff'], recipe:{star:2, flower:2, drop:2, feather:1}, speed:1.2, gap:86, decoys:true, magic:'rainbow'},
+   bot:['#ffffff','#fff3fb'], top:['#ffffff','#f3f9ff'], recipe:{star:2, flower:2, drop:2, feather:1}, speed:1.2, gap:86, decoys:['sock', 'shoe', 'fish', 'snail'], moving:0.4, flock:'birds', specials:['comet', 'bubble'], magic:'rainbow'},
 ];
 
 // Every spoken line: the key names its clip (assets/say-<key>.mp3); the text is said by the device's own
@@ -180,6 +204,8 @@ const LINES = {
   'find-5': 'Find three stars, one moon and two water drops!', 'find-6': 'Find two stars, two flowers, two water drops and one feather!',
   tap: 'Tap to fly!',
   oops: 'Oops!', whoops: 'Whoops!', bump: 'Bump!', sock: 'A smelly sock? No thanks!', shoe: 'An old shoe? No thanks!',
+  fish: 'A smelly fish? No thanks!', snail: 'A slimy snail? No thanks!',
+  zoom: 'Zoom! Super fast!', bubble: 'Whee! A bubble!', rainbow: 'Rainbow dash!', shield: 'Whoosh! The stars keep you safe!',
   home: "That's everything! Fly home!", pot: 'Tap to put them in the pot!', stir: 'Now stir! Round and round!',
   'magic-1': 'Abracadabra! A black cat! She wants to fly with you!',
   'magic-2': 'Abracadabra! A frog with a crown! He wants to fly with you!',
@@ -290,6 +316,11 @@ const sfx = {
   home(){ play('home', () => [659, 784, 988].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.35, i * 0.1))); },
   jump(){ play('jump', () => tone(300, 900, 0.25, 'sine', 0.4)); },
   click(){ tone(600, 900, 0.1, 'sine', 0.3); },
+  gust(){ noise(1.8, 500, 0.35); },
+  hoot(){ tone(450, 400, 0.22, 'sine', 0.4); tone(450, 380, 0.35, 'sine', 0.4, 0.3); },
+  tongue(){ tone(250, 900, 0.07, 'square', 0.12); tone(900, 300, 0.12, 'square', 0.12, 0.09); },
+  chirp(){ tone(2200, 3000, 0.06, 'sine', 0.2); tone(2400, 3200, 0.06, 'sine', 0.2, 0.09); },
+  popBubble(){ play('pop', () => noise(0.2, 2000, 0.5), 0.8, 1.6); },
 };
 
 let talking = null, talkUntil = 0;
@@ -392,7 +423,7 @@ function loadArt(names){
     im.src = `assets/${n}.png?v=${ASSET_V}`;
   }
 }
-loadArt(['witch-fly', 'cottage', 'cauldron', 'sock', 'shoe', ...FRIENDS.filter(f => f.img).map(f => f.img),
+loadArt(['witch-fly', 'cottage', 'cauldron', 'comet', ...Object.values(DECOYS).map(d => d.img), ...FRIENDS.filter(f => f.img).map(f => f.img),
   ...Object.values(ING).map(i => i.img),
   ...LEVELS.flatMap(l => Object.entries(l.art || {}).filter(([k]) => ['far', 'near', 'cap', 'body', 'top'].includes(k)).map(([, v]) => v))]
   .filter((n, i, a) => a.indexOf(n) === i));
@@ -411,14 +442,18 @@ const params = new URLSearchParams(location.search);
 let L = 0, lv = LEVELS[0], state = 'menu';
 let cam = 0, spd = 0, fade = 0, time = 0;
 const witch = {y: 90, vy: 0, ang: 0, oops: 0, safe: 0, t: 0, trail: 0};
-let pillars = [], items = [], parts = [], flyers = [];
+let pillars = [], items = [], parts = [], flyers = [], flocks = [], flockT = 0;
 let got = {}, shown = {}, complete = false, lastPillarX = 0, nextX = 0, prevCy = 0.5, homeX = 0;
 let brew = null;
 let unlocked = params.has('all') ? LEVELS.length : store.get('unlocked', 1);
 let friends = params.has('friends') ? +params.get('friends') : store.get('friends', 0);   // how many friends ride the broom
 
 const witchX = () => cam + vw * WITCH_X;
-const gapCentre = p => CEIL + p.gap / 2 + p.gy * (band() - p.gap);
+const gapCentre = p => {
+  const c = CEIL + p.gap / 2 + p.gy * (band() - p.gap);
+  if(!p.move) return c;   // a moving gap bobs up and down, but never off the screen
+  return clamp(c + Math.sin(time * p.move.sp + p.move.ph) * MOVE_AMP, CEIL + p.gap / 2, ground() - p.gap / 2);
+};
 const total = () => Object.values(lv.recipe).reduce((a, b) => a + b, 0);
 
 // Is friend `i` on the broom? At the cauldron, this level's friend only appears once it has jumped out.
@@ -434,7 +469,10 @@ function startLevel(i){
   got = {}; shown = {};
   for(const k in lv.recipe){ got[k] = 0; shown[k] = 0; }
   complete = false; prevCy = 0.5;
-  Object.assign(witch, {y: CEIL + band() / 2, vy: 0, ang: 0, oops: 0, safe: 0, t: 0});
+  Object.assign(witch, {y: CEIL + band() / 2, vy: 0, ang: 0, oops: 0, safe: 0, t: 0,
+    zoom: 0, bubble: 0, dash: 0, dashT: DASH_EVERY, shield: 0, frogT: 1, tongue: null, owlT: 1.5, hint: null,
+    windT: WIND_EVERY, wind: 0, windDir: 1});
+  flocks = []; flockT = FLOCK_EVERY * 0.5;
   nextX = Math.max(vw + 30, vw * WITCH_X + 170);
   // one easy ingredient right in front of her, to show what to do
   items.push({x: vw * WITCH_X + 75, fy: 0.5, kind: Object.keys(lv.recipe)[0], t: 0});
@@ -461,13 +499,14 @@ function spawnAhead(){
     const prev = pillars[pillars.length - 1];
     const prevGy = prev ? prev.gy : 0.5;
     const gy = clamp(prevGy + rand(-1, 1) * Math.min(1, MAX_SHIFT / room), 0, 1);
-    const p = {x: nextX, gy, gap: lv.gap};
+    const p = {x: nextX, gy, gap: lv.gap, move: lv.moving && Math.random() < lv.moving ? {sp: rand(1.4, 2.2), ph: rand(0, 6.3)} : null};
     const cy = (lv.gap / 2 + gy * room) / b;            // gap middle as a fraction of the band
     if(Math.random() < ITEM_CHANCE){
-      const inGap = Math.random() < 0.4;
+      const inGap = !p.move && Math.random() < 0.4;   // nothing waits inside a gap that moves
       const x = inGap ? p.x + PILLAR_W / 2 : p.x - (PILLAR_EVERY - PILLAR_W) / 2;
       const fy = inGap ? cy : clamp((cy + prevCy) / 2 + rand(-0.08, 0.08), 0.1, 0.9);
-      if(lv.decoys && Math.random() < DECOY_CHANCE) items.push({x, fy, decoy: pick(DECOYS), t: rand(0, 6)});
+      if(lv.decoys && Math.random() < DECOY_CHANCE) items.push({x, fy, decoy: DECOYS[pick(lv.decoys)], t: rand(0, 6)});
+      else if(lv.specials && Math.random() < SPECIAL_CHANCE) items.push({x, fy, special: pick(lv.specials), t: rand(0, 6)});
       else { const k = wantedKind(); if(k) items.push({x, fy, kind: k, t: rand(0, 6)}); }
     }
     pillars.push(p); prevCy = cy; nextX += PILLAR_EVERY;
@@ -498,11 +537,25 @@ function oops(p){
   for(let i = 0; i < 8; i++) parts.push({x: witchX(), y: witch.y - 8, vx: rand(-40, 40), vy: rand(-50, 0), g: 120, life: 0.7, max: 0.7, c: '#ffe066', s: rand(1, 2)});
 }
 
+function starSave(){
+  witch.safe = 1.2; witch.shield = STAR_RECHARGE;
+  sfx.poof(); say('shield');
+  for(let i = 0; i < 20; i++){ const a = rand(0, Math.PI * 2), v = rand(30, 70);
+    parts.push({x: witchX(), y: witch.y - 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.8, max: 0.8, c: pick(['#fff3a0', '#ffd447', '#ffffff']), s: 2, star: true}); }
+}
+
 function take(it){
   it.taken = true;
   const wx = witchX();
   if(it.decoy){
     it.bat = 0; sfx.nope(); say(it.decoy.say);
+    return;
+  }
+  if(it.special){
+    const y = CEIL + it.fy * band();
+    for(let i = 0; i < 16; i++) parts.push({x: it.x, y, vx: rand(-50, 50), vy: rand(-50, 50), life: 0.7, max: 0.7, c: pick(['#fff3a0', '#ffd447', '#bfe9ff', '#ffffff']), s: 2, star: true});
+    if(it.special === 'comet'){ witch.zoom = ZOOM_TIME; sfx.poof(); say('zoom'); }
+    else { witch.bubble = BUBBLE_TIME; sfx.bubble(); say('bubble'); }
     return;
   }
   const k = it.kind, need = lv.recipe[k];
@@ -518,7 +571,7 @@ function take(it){
   say(`c-${k}-${got[k]}`);
   for(let i = 0; i < 8; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: '#fff6a8', s: 1.5});
   if(Object.keys(lv.recipe).every(k2 => got[k2] >= lv.recipe[k2])){
-    complete = true; state = 'home';
+    complete = true; state = 'home'; witch.zoom = witch.bubble = witch.dash = 0;
     lastPillarX = pillars.length ? pillars[pillars.length - 1].x : wx;
     homeX = Math.max(lastPillarX + 140, cam + vw + 40);
     say('home', true);
@@ -543,7 +596,8 @@ const trailAt = (x, y) => [x + (RIDER.trail[0] - RIDER.body[0]) / RES, y + (RIDE
 function updateFly(dt){
   witch.t += dt;
   if(state !== 'ready'){
-    spd += (lv.speed * SPEED - spd) * Math.min(1, dt * 2.5);
+    const boost = (witch.zoom > 0 ? ZOOM_SPEED : 1) * (witch.dash > 0 ? DASH_SPEED : 1);
+    spd += (lv.speed * SPEED * boost - spd) * Math.min(1, dt * 2.5);
     cam += spd * dt;
   }
   const wx = witchX(), g = ground();
@@ -555,14 +609,25 @@ function updateFly(dt){
     witch.vy = (ty - witch.y) * 1.6; witch.y += witch.vy * dt;
     if(wx >= homeX - 40) startBrew();
   } else {
-    witch.vy = Math.min(MAX_FALL, witch.vy + GRAVITY * dt);
-    const p = pillars.find(p => p.x + PILLAR_W > wx - 4 && p.x < wx + ASSIST_RANGE);
-    if(p && ASSIST > 0 && witch.oops <= 0) witch.vy += (gapCentre(p) - witch.y) * ASSIST * dt;
+    if(witch.bubble > 0) witch.vy = lerp(witch.vy, -BUBBLE_RISE, Math.min(1, dt * 3));   // floating up in a bubble
+    else {
+      witch.vy = Math.min(MAX_FALL, witch.vy + GRAVITY * dt);
+      const p = pillars.find(p => p.x + PILLAR_W > wx - 4 && p.x < wx + ASSIST_RANGE);
+      if(p && ASSIST > 0 && witch.oops <= 0) witch.vy += (gapCentre(p) - witch.y) * ASSIST * dt;
+    }
+    if(lv.wind) wind(dt);
     witch.y += witch.vy * dt;
     if(witch.y > g - 12){ witch.y = g - 12; witch.vy = -FLAP * 0.75; sfx.boing(); }
     if(witch.y < CEIL + 4){ witch.y = CEIL + 4; if(witch.vy < 0) witch.vy = 0; }
-    if(witch.safe <= 0) for(const p2 of pillars) if(hits(p2, wx, witch.y - 2)){ oops(p2); break; }
+    const through = witch.zoom > 0 || witch.bubble > 0 || witch.dash > 0;   // zooming, bubbling and dashing fly through everything
+    if(witch.safe <= 0 && !through) for(const p2 of pillars) if(hits(p2, wx, witch.y - 2)){
+      if(friendShown(4) && witch.shield <= 0) starSave(); else oops(p2);
+      break;
+    }
+    powers(dt, wx);
   }
+  timers(dt);
+  if(lv.flock) updateFlocks(dt, wx);
   witch.oops = Math.max(0, witch.oops - dt);
   witch.safe = Math.max(0, witch.safe - dt);
   const target = clamp(witch.vy / 260, -0.3, 0.4);
@@ -574,11 +639,81 @@ function updateFly(dt){
     if(it.bat != null){ it.bat += dt; continue; }
     if(it.taken) continue;
     const iy = CEIL + it.fy * band() + Math.sin(it.t * 3) * 2;
-    if(Math.hypot(it.x - wx, iy - (witch.y - 3)) < PICK_R) take(it);
+    const d = Math.hypot(it.x - wx, iy - (witch.y - 3));
+    if(d < PICK_R) take(it);
+    else if(friendShown(0) && !it.decoy && d < PICK_R + CAT_REACH && state !== 'ready'){   // the cat pulls it in
+      const k = CAT_PULL * dt / d;
+      it.x += (wx - it.x) * k; it.fy += ((witch.y - 3 - iy) * k) / band();
+      if(Math.random() < dt * 20) parts.push({x: it.x, y: iy, vx: rand(-10, 10), vy: rand(-10, 10), life: 0.4, max: 0.4, c: '#ffe9a8', s: 1});
+    }
   }
   pillars = pillars.filter(p => p.x > cam - 60);
   items = items.filter(it => it.x > cam - 60 && !(it.bat > 1.5) && !(it.taken && it.bat == null));
   spawnAhead();
+}
+
+// the friends' powers, while she's flying
+function powers(dt, wx){
+  // the frog's tongue grabs an ingredient that's a little out of reach
+  witch.frogT -= dt;
+  if(friendShown(1) && witch.frogT <= 0){
+    const it = items.find(it => !it.taken && it.kind && got[it.kind] < lv.recipe[it.kind] && it.x > wx - 10 &&
+      Math.hypot(it.x - wx, CEIL + it.fy * band() - witch.y) < FROG_REACH);
+    if(it){ witch.tongue = {x: it.x, y: CEIL + it.fy * band(), t: 0.3}; sfx.tongue(); take(it); witch.frogT = FROG_EVERY; }
+  }
+  // the owl hoots and points at the next ingredient she needs
+  witch.owlT -= dt;
+  if(friendShown(3) && witch.owlT <= 0){
+    witch.owlT = OWL_EVERY;
+    const next = items.filter(it => !it.taken && it.kind && got[it.kind] < lv.recipe[it.kind] && it.x > wx + 10).sort((a, b) => a.x - b.x)[0];
+    if(next && next !== witch.hint) sfx.hoot();
+    witch.hint = next || null;
+  }
+  // the unicorn's rainbow dash
+  if(friendShown(5) && (witch.dashT -= dt) <= 0){ witch.dashT = DASH_EVERY; witch.dash = DASH_TIME; sfx.poof(); say('rainbow'); }
+  // speed lines while zooming or dashing
+  if((witch.zoom > 0 || witch.dash > 0) && Math.random() < dt * 40)
+    parts.push({x: wx + rand(0, vw * 0.7), y: rand(CEIL, ground()), vx: -220, vy: 0, life: 0.3, max: 0.3, c: 'rgba(255,255,255,.8)', s: rand(2, 4), line: true});
+}
+function timers(dt){
+  if(witch.bubble > 0 && (witch.bubble -= dt) <= 0){   // the bubble pops
+    witch.bubble = 0; sfx.popBubble();
+    for(let i = 0; i < 14; i++){ const a = i / 14 * Math.PI * 2;
+      parts.push({x: witchX() + Math.cos(a) * 26, y: witch.y - 6 + Math.sin(a) * 26, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40, life: 0.4, max: 0.4, c: '#dff4ff', s: 1.5}); }
+  }
+  witch.zoom = Math.max(0, witch.zoom - dt);
+  witch.dash = Math.max(0, witch.dash - dt);
+  witch.shield = Math.max(0, witch.shield - dt);
+  if(witch.tongue && (witch.tongue.t -= dt) <= 0) witch.tongue = null;
+  if(witch.hint && (witch.hint.taken || witch.hint.x < witchX() - 20)) witch.hint = null;
+}
+// snowy gusts push her up or down for a moment
+function wind(dt){
+  if((witch.windT -= dt) <= 0 && witch.wind <= 0){ witch.wind = WIND_TIME; witch.windDir = pick([-1, 1]); witch.windT = WIND_EVERY; sfx.gust(); }
+  if(witch.wind > 0){
+    witch.wind -= dt;
+    witch.vy += WIND_PUSH * witch.windDir * dt;
+    if(Math.random() < dt * 50) parts.push({x: cam + vw + 10, y: rand(CEIL, ground()), vx: -260, vy: witch.windDir * 60, life: 0.9, max: 0.9, c: 'rgba(255,255,255,.85)', s: rand(2, 4), line: true});
+  }
+}
+// flocks of birds (or bats at night) fly across; she scatters them if she flies into them
+function updateFlocks(dt, wx){
+  if(state === 'fly' && (flockT -= dt) <= 0){
+    flockT = FLOCK_EVERY * rand(0.7, 1.3);
+    const y0 = CEIL + band() * rand(0.15, 0.7), n = 5 + Math.floor(rand(0, 3));
+    for(let i = 0; i < n; i++){   // in a V, the leader in front
+      const k = Math.abs(i - (n - 1) / 2);
+      flocks.push({x: cam + vw + 20 + k * 9, y: y0 + k * 5, vx: -28, vy: 0, ph: rand(0, 6.3), scared: false});
+    }
+  }
+  for(const b of flocks){
+    b.x += b.vx * dt; b.y += b.vy * dt + Math.sin(time * 3 + b.ph) * 4 * dt;
+    if(!b.scared && Math.hypot(b.x - wx, b.y - witch.y) < 12){
+      for(const o of flocks) if(!o.scared && Math.hypot(o.x - b.x, o.y - b.y) < 40){ o.scared = true; o.vx = rand(-70, 50); o.vy = rand(-80, -30); }
+      sfx.chirp();
+    }
+  }
+  flocks = flocks.filter(b => b.x > cam - 40 && b.y > -30);
 }
 
 /* ======== the cauldron ======== */
@@ -837,8 +972,9 @@ function drawFriend(i, x, y){
   if(!im) return emoji(f.emoji, x, y - 8, 14);
   const w = uw(im) / (f.frames || 1), h = uh(im);
   if(f.frames) return frameOf(im, f.frames, Math.floor(time * WITCH_FPS * 0.75 + 3), x - w / 2, y - h);
-  if(f.hang){   // the lantern swings from the broom handle
+  if(f.hang){   // the lantern swings from the broom handle, glowing
     ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.round(Math.sin(time * 3) * 0.25 / 0.08) * 0.08);
+    ctx.fillStyle = `rgba(255,190,80,${0.22 + Math.sin(time * 6) * 0.05})`; ctx.beginPath(); ctx.arc(0, h * 0.6, h * 0.9, 0, 7); ctx.fill();
     pic(im, -w / 2, 0); ctx.restore();
     return;
   }
@@ -897,14 +1033,64 @@ function drawFly(){
     }
     if(it.taken) continue;
     if(it.decoy){ decoy(it.decoy, x, y); continue; }
+    if(it.special === 'comet'){
+      ctx.fillStyle = `rgba(255,230,120,${0.35 + Math.sin(it.t * 8) * 0.15})`; ctx.beginPath(); ctx.arc(R(x), R(y), 15, 0, 7); ctx.fill();
+      if(ART.comet) pic(ART.comet, x - uw(ART.comet) / 2, y - uh(ART.comet) / 2); else emoji('🌠', x, y, 16);
+      continue;
+    }
+    if(it.special === 'bubble'){ drawBubble(x, y, 10 + Math.sin(it.t * 4) * 0.8); continue; }
     ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(R(x), R(y), 14 + Math.sin(it.t * 5), 0, 7); ctx.fill();
     ingredient(it.kind, x, y, 13);
   }
+  drawFlocks();
   drawParts(cam);
   const wx = witchX() - cam;
   const flicker = witch.safe > 0 && witch.oops <= 0 ? (Math.sin(time * 30) > 0 ? 1 : 0.4) : 1;
   drawRider(wx, witch.y, witch.ang + (witch.oops > 0 ? (1 - witch.oops / OOPS_TIME) * Math.PI * 2 : 0), flicker);
   if(witch.oops > 0) emoji('💫', wx + 4, witch.y - 30, 10);
+  if(witch.bubble > 0) drawBubble(wx, witch.y - 6, 30);
+  if(friendShown(4) && witch.shield <= 0 && state !== 'ready'){   // the stars, ready to keep her safe, circle her
+    for(let i = 0; i < 3; i++){ const a = time * 2.5 + i * Math.PI * 2 / 3;
+      starPath(wx + Math.cos(a) * 24, witch.y - 6 + Math.sin(a) * 10, 2.5); ctx.fillStyle = '#ffe680'; ctx.fill(); }
+  }
+  if(witch.tongue){   // the frog's tongue
+    const s = friendSpot(1, wx, witch.y);
+    ctx.strokeStyle = '#ff6f8f'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(s.x + 5, s.y - 6); ctx.lineTo(witch.tongue.x - cam, witch.tongue.y); ctx.stroke();
+  }
+  if(witch.hint && !witch.hint.taken) drawHint(witch.hint);
+  if(lv.dark){   // only the light round the witch shows; the lantern makes it bigger
+    const r = friendShown(2) ? LANTERN_LIGHT : 60, gr = ctx.createRadialGradient(wx, witch.y, r * 0.5, wx, witch.y, r);
+    gr.addColorStop(0, 'rgba(4,6,24,0)'); gr.addColorStop(1, `rgba(4,6,24,${NIGHT_DARK})`);
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, vw, vh);
+  }
+}
+
+// a soap bubble: see-through, with a shiny rim
+function drawBubble(x, y, r){
+  ctx.fillStyle = 'rgba(190,235,255,.25)'; ctx.beginPath(); ctx.arc(R(x), R(y), r, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = `hsla(${(time * 90) % 360},90%,75%,.6)`; ctx.beginPath(); ctx.arc(R(x), R(y), r - 1, 0.2, 1.4); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(R(x - r * 0.4), R(y - r * 0.45), Math.max(1, r * 0.15), 0, 7); ctx.fill();
+}
+// the owl's pointer: a bouncing arrow over the next ingredient, or at the right edge when it's still off screen
+function drawHint(it){
+  const x = it.x - cam, y = CEIL + it.fy * band(), b = Math.abs(Math.sin(time * 5)) * 3;
+  ctx.fillStyle = '#ffe14d'; ctx.strokeStyle = '#7a4a00'; ctx.lineWidth = 0.75;
+  ctx.beginPath();
+  if(x < vw - 8){ const ty = y - 16 - b; ctx.moveTo(x - 4, ty - 5); ctx.lineTo(x + 4, ty - 5); ctx.lineTo(x, ty); }
+  else { const ex = vw - 4 - b, ey = clamp(y, CEIL + 10, ground() - 10); ctx.moveTo(ex - 5, ey - 4); ctx.lineTo(ex - 5, ey + 4); ctx.lineTo(ex, ey); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+// little birds (dark v's) or bats, flapping
+function drawFlocks(){
+  const bats = lv.flock === 'bats';
+  for(const b of flocks){
+    const x = R(b.x - cam), y = R(b.y), f = Math.sin(time * (bats ? 18 : 12) + b.ph) * 2.5;
+    ctx.strokeStyle = bats ? '#1a1430' : '#3a3550'; ctx.fillStyle = '#1a1430'; ctx.lineWidth = 1; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 4, y - f); ctx.lineTo(x, y); ctx.lineTo(x + 4, y - f); ctx.stroke();
+    if(bats){ ctx.beginPath(); ctx.arc(x, y, 1.2, 0, 7); ctx.fill(); }
+  }
 }
 
 function drawParts(camX){
@@ -912,6 +1098,7 @@ function drawParts(camX){
     ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
     const x = R(p.x - camX), y = R(p.y);
     if(p.ring){ ctx.strokeStyle = p.c; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.arc(x, y, p.s, 0, 7); ctx.stroke(); }
+    else if(p.line){ ctx.fillStyle = p.c; ctx.fillRect(x, y, p.s * 3, 0.5); }
     else if(p.star){ ctx.fillStyle = p.c; ctx.fillRect(x - p.s, y - 0.25, p.s * 2, 0.5); ctx.fillRect(x - 0.25, y - p.s, 0.5, p.s * 2); }
     else { ctx.fillStyle = p.c; ctx.fillRect(x - p.s / 2, y - p.s / 2, p.s, p.s); }
   }
@@ -1067,6 +1254,7 @@ function frame(now){
 let down = false, lastP = null;
 function tap(){
   if(state === 'ready'){ state = 'fly'; flap(); }
+  else if(witch.bubble > 0) return;   // floating in a bubble: no flapping
   else if(state === 'fly' || (state === 'home' && witchX() <= lastPillarX + PILLAR_W + 20)) flap();
   else if(state === 'brew') brewTap();
 }

@@ -27,8 +27,8 @@ match the pictures.
 - Trees, clouds and rocks stand in the way with wide gaps between them, and the witch is gently
   pulled towards the middle of the next gap. A bump makes her spin round, she drifts back, and for
   a moment she can fly straight through things.
-- From level 3 a smelly sock or an old shoe floats about too. Catch one and she bats it away:
-  "A smelly sock? No thanks!"
+- From level 3 things she doesn't want float about too: a smelly sock, an old shoe, and later a
+  smelly fish and a slimy snail. Catch one and she bats it away: "A smelly sock? No thanks!"
 - Missed an ingredient? More keep coming until the recipe is complete. Then "That's everything!
   Fly home!" and she glides down to her cottage.
 - At the cauldron: tap to throw the ingredients in one by one (the voice counts them again, "First
@@ -37,18 +37,34 @@ match the pictures.
   when the last one lights, the potion is ready.
   Abracadabra! The level's friend jumps out of the pot, somersaults onto the broom ("A black cat!
   She wants to fly with you!"), and the end card shows 🗺️ (levels), 🔄 (again) and ▶️ (next level).
-- The broom always carries every friend earned so far, on every level and on the title screen.
+- The broom always carries every friend earned so far, on every level and on the title screen,
+  and each friend helps her fly:
+  - the **cat** pulls nearby ingredients in towards the broom;
+  - the **frog**'s tongue grabs an ingredient that's a little out of reach, every few seconds;
+  - the **pumpkin lantern** glows, and lights up the dark night level around her;
+  - the **owl** hoots and puts a bouncing yellow arrow over the next ingredient she needs (or at the
+    edge of the screen when it's still on its way);
+  - the **stars** circle her, and carry her safely through the next thing she'd bump into ("Whoosh!
+    The stars keep you safe!"), then come back a few seconds later;
+  - the **unicorn** gives her a rainbow dash every now and then: she flies faster, straight through
+    everything.
+- Special things to catch: a **shooting star** makes her zoom along, sparkling and flying through
+  everything ("Zoom! Super fast!"), and a **bubble** wraps her up and floats her gently upwards
+  until it pops ("Whee! A bubble!"; taps do nothing inside it).
+- Things move about: from level 2 some gaps bob slowly up and down, flocks of birds (bats at night)
+  fly across and scatter, chirping, if she flies into them (no harm done), and on the snowy hills
+  gusts of wind push her up or down for a moment.
 
 ### The six levels
 
 | Level | Where | Recipe | New friend | Also | New |
 | --- | --- | --- | --- | --- | --- |
-| 1 | sunny meadow: oak trees, fluffy clouds | 3 flowers | a black cat, behind her | flowers grow all over the meadow | learn to tap; slow, very wide gaps |
-| 2 | forest: fir trees, hanging moss | 2 mushrooms, 2 blueberries | a frog with a crown, on the handle | | two kinds to collect |
-| 3 | pumpkin patch at sunset: stacked hay bales, autumn branches, a red barn | 2 leaves, 2 apples, 1 feather | a pumpkin lantern, hanging from the handle | | three kinds; socks and shoes to avoid |
-| 4 | snowy hills: snow-capped rock pillars, snow clouds with icicles | 3 snowflakes, 2 blueberries | a snowy owl, on her hat | snow falls | a little faster |
-| 5 | starry night: fairy-tale towers, dark clouds, a village with lit windows | 3 stars, 1 moon, 2 water drops | a trail of stars from the broom | fireworks | dark sky |
-| 6 | rainbow clouds: pink cloud piles, a flower field, a fairy castle | 2 stars, 2 flowers, 2 drops, 1 feather | a rainbow trail, and a unicorn flying alongside | a rainbow | four kinds, fastest |
+| 1 | sunny meadow: oak trees, fluffy clouds | 3 flowers | a black cat, behind her | flowers grow all over the meadow | learn to tap; slow, very wide gaps; birds |
+| 2 | forest: fir trees, hanging moss | 2 mushrooms, 2 blueberries | a frog with a crown, on the handle | | two kinds; some gaps bob; bubbles |
+| 3 | pumpkin patch at sunset: stacked hay bales, autumn branches, a red barn | 2 leaves, 2 apples, 1 feather | a pumpkin lantern, hanging from the handle | | three kinds; socks and shoes; shooting stars |
+| 4 | snowy hills: snow-capped rock pillars, snow clouds with icicles | 3 snowflakes, 2 blueberries | a snowy owl, on her hat | snow falls | gusts of wind; smelly fish |
+| 5 | starry night: fairy-tale towers, dark clouds, a village with lit windows | 3 stars, 1 moon, 2 water drops | a trail of stars from the broom | fireworks | dark (the lantern lights it); bats; slimy snails |
+| 6 | rainbow clouds: pink cloud piles, a flower field, a fairy castle | 2 stars, 2 flowers, 2 drops, 1 feather | a rainbow trail, and a unicorn flying alongside | a rainbow | four kinds, fastest; a bit of everything |
 
 ## Running it
 
@@ -79,12 +95,24 @@ At the top of the script in `index.html`:
 | `ITEM_CHANCE`, `DECOY_CHANCE` | How often an ingredient appears between obstacles, and how often a sock or shoe does instead |
 | `STIR_NEEDED`, `STIR_TAP`, `STIR_STARS` | How much stirring finishes the potion, how much one tap counts, and how many stars light up on the way |
 | `MAGIC_TIME` | How long the potion's magic plays before the end card |
+| `CAT_REACH`, `CAT_PULL` | How far beyond catching distance the cat pulls ingredients in, and how fast |
+| `FROG_REACH`, `FROG_EVERY` | How far the frog's tongue reaches, and how often it can grab |
+| `LANTERN_LIGHT`, `NIGHT_DARK` | How far the lantern lights up the dark night level, and how dark it is outside that light |
+| `OWL_EVERY` | How often the owl hoots and points at the next ingredient |
+| `STAR_RECHARGE` | Seconds before the stars can carry her safely through another bump |
+| `DASH_EVERY`, `DASH_TIME`, `DASH_SPEED` | The unicorn's rainbow dash: how often, how long, how much faster |
+| `MOVE_AMP` | How far a moving gap bobs up and down (each level's `moving` says how many gaps move) |
+| `WIND_EVERY`, `WIND_TIME`, `WIND_PUSH` | Snowy gusts: how often, how long, how hard |
+| `FLOCK_EVERY` | Seconds between flocks of birds or bats |
+| `SPECIAL_CHANCE` | How often a shooting star or bubble appears between two obstacles |
+| `ZOOM_TIME`, `ZOOM_SPEED` | The shooting star: how long she zooms and how much faster |
+| `BUBBLE_TIME`, `BUBBLE_RISE` | The bubble: how long it carries her and how fast it floats up |
 | `SFX_VOL`, `VOICE_VOL`, `MUSIC_VOL` | Loudness of the effects, the voice (every line is evened out first) and the music |
 | `MUSIC_DUCK`, `MUSIC_XFADE` | How far the music dips while the voice talks; seconds of the track's end blended into its start so it loops without a seam |
 | `ING`, `DECOYS` | The ingredients (emoji, picture, words, potion colour) and the things to avoid |
 | `FRIENDS` | The friend each level adds, its picture and where it sits on the broom (in pixels of the witch's picture) |
 | `RIDER` | Where the witch's body is in her picture, and how high the broom is in each animation frame, so the friends bob with it |
-| `LEVELS` | Per level: sky colours, recipe, `speed`, `gap` (height of the gaps), `decoys`, the extra `magic`, and `art`: its background strips (`far`, `near`, and `soil`, the colour under them) and its obstacles: a `cap` at the gap, a `body` stacked down to the ground (`bodyStep` makes it a wobbly pile), and a `top` piled up into the sky (`topStep` apart). The other colours are only used while the pictures load |
+| `LEVELS` | Per level: sky colours, recipe, `speed`, `gap` (height of the gaps), `decoys` (which things to avoid), `moving` (share of gaps that bob), `wind`, `flock` (birds or bats), `dark`, `specials` (shooting stars and bubbles), the extra `magic`, and `art`: its background strips (`far`, `near`, and `soil`, the colour under them) and its obstacles: a `cap` at the gap, a `body` stacked down to the ground (`bodyStep` makes it a wobbly pile), and a `top` piled up into the sky (`topStep` apart). The other colours are only used while the pictures load |
 | `LINES` | Every spoken line (its clip is `assets/say-<key>.mp3`; the text is for the device's voice if the clip can't load) |
 
 ## The plan from here
@@ -121,7 +149,9 @@ which is no longer in the game. The untouched originals are in `art-src/`; `pyth
 - Ingredients, `assets/ing-<name>.png`: flower, mushroom, berry (blueberries), leaf (maple), apple,
   feather, snow (snowflake), star, moon and drop (water drop); one picture each. The flower also
   grows all over the meadow at the end of level 1.
-- Things to avoid: `assets/sock.png` and `shoe.png`.
+- Things to avoid: `assets/sock.png`, `shoe.png`, `fish.png` (a smelly green fish skeleton) and
+  `snail.png` (a slimy snail).
+- `assets/comet.png`: the shooting star that makes her zoom. Bubbles, birds and bats are drawn in code.
 - Level 1: `assets/bg-meadow-far.png` (distant hills) and `bg-meadow-near.png` (grass and flowers
   along the bottom), each shown next to its mirror image so it repeats without a seam;
   `crown-meadow.png` (the leaves cropped off a whole tree), `bark-oak.png` (stacked up each trunk)
@@ -152,11 +182,13 @@ used commercially; we credit "elevenlabs.io" and "Eleven Music" anyway. No real 
 used. The audio is here only as this game's own sounds: it is not licensed for anyone else to reuse,
 and it is not covered by any licence that may later be put on this game's code.
 
-- **Voice**, `assets/say-*.mp3`, 43 clips: stock voice "Jessica - Playful, Bright, Warm", model
+- **Voice**, `assets/say-*.mp3`, 49 clips: stock voice "Jessica - Playful, Bright, Warm", model
   Eleven Multilingual v2, speed 0.85, stability 0.6 (the same voice and settings as Nut Run). The
   lines are in `LINES` in `index.html`: the six "Find …!" recipes, "Tap to fly!", the counting
   lines (`say-c-<ingredient>-<n>.mp3`: "First flower!", "Second flower!", "Third flower!" and so on for
-  every ingredient, or "A feather!" and "A moon!" where a level only needs one), "Oops!", "Whoops!", "Bump!", the sock and shoe lines, "That's everything! Fly home!",
+  every ingredient, or "A feather!" and "A moon!" where a level only needs one), "Oops!", "A smelly
+  fish? No thanks!", "A slimy snail? No thanks!", "Zoom! Super fast!", "Whee! A bubble!", "Rainbow
+  dash!", "Whoosh! The stars keep you safe!", "Whoops!", "Bump!", the sock and shoe lines, "That's everything! Fly home!",
   "Tap to put them in the pot!", "Now stir! Round and round!", a line for each friend ("Abracadabra!
   A black cat! She wants to fly with you!" and so on) and "Hooray!".
 - **Sound effects**, `assets/sfx-*.mp3`, 11 clips made with the ElevenLabs sound effects model, each

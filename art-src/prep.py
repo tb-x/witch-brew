@@ -158,7 +158,7 @@ save(trim(load('cauldron')), 'cauldron')
 # ingredients and the things to avoid
 for n in ('flower', 'mushroom', 'berry', 'leaf', 'apple', 'feather', 'snow', 'star', 'moon', 'drop'):
     save(trim(load(n)), f'ing-{n}')
-for n in ('sock', 'shoe'):
+for n in ('sock', 'shoe', 'fish', 'snail', 'comet'):
     save(trim(load(n)), n)
 
 # obstacles: a cap at the gap, a body stacked down to the ground, and a pile hanging from the sky
