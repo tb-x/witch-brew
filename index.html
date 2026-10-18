@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#7b4bc4">
+<title>Witchy Brew</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap" rel="stylesheet" crossorigin="anonymous">
+<style>
+  /* Layout: one full-screen canvas (flying and the cauldron); the level picker and end card are HTML overlays; home top-left, sound top-right, recipe drawn top-centre */
+  :root{--ink:#2a2140;--purple:#7b4bc4;--gold:#ffd447;--paper:#fff8ec;
+    --title:'Fredoka','Trebuchet MS',sans-serif;--body:Verdana,Tahoma,sans-serif}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#8fd3ff;color:var(--ink);font-family:var(--body);
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  #safe{position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none}
+
+  #home,#sound{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));z-index:50;width:44px;height:44px;border-radius:50%;
+    display:grid;place-items:center;color:#2a2140;background:rgba(255,255,255,.82);border:0;padding:0;
+    box-shadow:0 3px 0 rgba(0,0,0,.18);touch-action:manipulation;-webkit-tap-highlight-color:transparent;text-decoration:none;cursor:pointer}
+  #home{left:calc(10px + env(safe-area-inset-left,0px))}
+  #sound{right:calc(10px + env(safe-area-inset-right,0px));font-size:22px}
+  #home svg{width:24px;height:24px}
+  #home:active,#sound:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.18)}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    padding:calc(64px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) calc(16px + env(safe-area-inset-left,0px));
+    background:rgba(42,33,64,.28)}
+  .hidden{display:none}
+  #brand{display:flex;flex-direction:column;align-items:center;gap:4px}
+  h1{margin:0;font-family:var(--title);font-size:clamp(38px,10vw,64px);color:#fff;letter-spacing:1px;
+    text-shadow:0 4px 0 var(--purple),0 8px 14px rgba(0,0,0,.25)}
+  .hero{font-size:54px;line-height:1}
+  #levels{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;max-width:420px}
+  .lvl{position:relative;width:86px;height:86px;border-radius:50%;border:0;background:var(--paper);font-size:44px;line-height:1;
+    box-shadow:0 6px 0 var(--purple);touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+  .lvl:active{transform:translateY(3px);box-shadow:0 3px 0 var(--purple)}
+  .lvl b{position:absolute;right:-4px;bottom:-4px;width:32px;height:32px;border-radius:50%;background:var(--purple);color:#fff;
+    font:bold 17px/32px var(--body)}
+  .lvl:disabled{opacity:.55;cursor:default}
+  .lvl:disabled b{background:#777;font-size:15px}
+  .panel{background:var(--paper);border-radius:28px;padding:18px 26px 24px;box-shadow:0 8px 0 var(--purple);
+    display:flex;flex-direction:column;align-items:center;gap:8px}
+  .big{font-size:76px;line-height:1.1}
+  .cheer{font-family:var(--title);font-size:34px;color:var(--purple)}
+  .row{display:flex;gap:16px}
+  .btn{width:78px;height:78px;border-radius:50%;border:0;background:#fff;font-size:36px;line-height:1;cursor:pointer;
+    box-shadow:0 5px 0 var(--purple);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .btn.go{background:var(--gold)}
+  .btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--purple)}
+  @media (orientation:landscape) and (max-height:500px){
+    #menu{flex-direction:row;gap:36px;padding-top:calc(16px + env(safe-area-inset-top,0px))}
+    #levels{max-width:330px}
+    .lvl{width:78px;height:78px;font-size:40px}
+  }
+</style>
+</head>
+<body>
+<a id="home" href="../index.html" aria-label="All games" title="All games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.8V20h12V9.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="M10 20v-5.5h4V20" fill="currentColor"/></svg></a>
+<button id="sound" aria-label="Sound on or off">🔊</button>
+<canvas id="cv"></canvas>
+<div id="safe"></div>
+
+<div id="menu" class="overlay">
+  <div id="brand"><h1>Witchy Brew</h1><div class="hero">🧙‍♀️🧹</div></div>
+  <div id="levels"></div>
+</div>
+
+<div id="card" class="overlay hidden">
+  <div class="panel">
+    <div class="big" id="cardEmoji">🧪</div>
+    <div class="cheer">Hooray!</div>
+    <div class="row">
+      <button class="btn" id="bMap" aria-label="All levels">🗺️</button>
+      <button class="btn" id="bAgain" aria-label="Play again">🔄</button>
+      <button class="btn go" id="bNext" aria-label="Next level">▶️</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ======== tuning knobs ======== */
+const VIEW_MIN = 180;        // game units across the short side of the screen (smaller = bigger witch)
+const CEIL = 8;              // soft ceiling, units below the top edge
+const GROUND_H = 20;         // height of the ground strip
+const WITCH_X = 0.3;         // where the witch flies across the screen (0 = left edge, 1 = right)
+const GRAVITY = 240;         // units/s² pulling her down
+const FLAP = 100;            // upward speed one tap gives
+const MAX_FALL = 70;         // she never drops faster than this, so she glides
+const SPEED = 40;            // flying speed in units/s, times each level's `speed`
+const PILLAR_EVERY = 125;    // distance from one obstacle to the next
+const PILLAR_W = 22;         // obstacle width
+const MAX_SHIFT = 45;        // most a gap moves up or down from one obstacle to the next
+const ASSIST = 2;            // gentle pull towards the middle of the next gap (0 = off)
+const ASSIST_RANGE = 70;     // how far ahead the pull starts
+const HIT_R = 5;             // the witch's bump radius (small = forgiving)
+const PICK_R = 15;           // how close she must get to catch an ingredient (big = easy)
+const OOPS_TIME = 0.9;       // seconds she spins after a bump
+const SAFE_TIME = 1.8;       // seconds she can pass through obstacles after a bump
+const ITEM_CHANCE = 0.75;    // chance of an ingredient between two obstacles (while some are still needed)
+const DECOY_CHANCE = 0.3;    // chance of a sock or shoe instead, on levels with `decoys`
+const STIR_NEEDED = 900;     // screen pixels of stirring (dragging) to finish the potion
+const STIR_TAP = 150;        // a tap counts as this much stirring
+const MAGIC_TIME = 4.5;      // seconds the potion's magic plays before the end card
+const SFX_VOL = 0.35;        // loudness of the beeps
+
+const ING = {
+  flower:   {e:'🌸', one:'flower',     many:'flowers',     col:'#ff8fc8'},
+  mushroom: {e:'🍄', one:'mushroom',   many:'mushrooms',   col:'#e8473f'},
+  berry:    {e:'🫐', one:'blueberry',  many:'blueberries', col:'#5560e0'},
+  leaf:     {e:'🍁', one:'leaf',       many:'leaves',      col:'#e8762b'},
+  apple:    {e:'🍎', one:'apple',      many:'apples',      col:'#d9302c'},
+  feather:  {e:'🪶', one:'feather',    many:'feathers',    col:'#6fb7e8'},
+  snow:     {e:'❄️', one:'snowflake',  many:'snowflakes',  col:'#bfe6ff'},
+  star:     {e:'⭐', one:'star',       many:'stars',       col:'#ffd447'},
+  moon:     {e:'🌙', one:'moon',       many:'moons',       col:'#ffe58a'},
+  drop:     {e:'💧', one:'water drop', many:'water drops', col:'#4fb3ff'},
+};
+const DECOYS = [{e:'🧦', say:'A smelly sock? No thanks!'}, {e:'👟', say:'An old shoe? No thanks!'}];
+
+// sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours
+const LEVELS = [
+  {icon:'🌼', sky:['#8fd3ff','#e6f6ff'], hills:['#a6dc8f','#7cc66a'], ground:'#6bb35a',
+   bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96,
+   magic:'flowers', prize:'🌷', line:'Look! The flowers are growing!'},
+  {icon:'🌲', sky:['#9fdcc0','#eafff3'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
+   bot:['#6b4428','#2f7a3a'], top:['#2f7a3a','#3d9447'], recipe:{mushroom:2, berry:2}, speed:1, gap:92,
+   magic:'frog', prize:'🐸', line:'Look! The frog has a crown!'},
+  {icon:'🎃', sky:['#ff9f5a','#ffe0b0'], hills:['#c98a4a','#8a6a2f'], ground:'#6b7a32',
+   bot:['#7a5230','#e07a2a'], top:['#b46a3a','#7a4a2a'], recipe:{leaf:2, apple:2, feather:1}, speed:1.05, gap:90, decoys:true,
+   magic:'pumpkin', prize:'🎃', line:'Look! The pumpkin is growing big!'},
+  {icon:'⛄', sky:['#bcdcff','#f4f9ff'], hills:['#e3eefa','#cfdff0'], ground:'#f2f7ff',
+   bot:['#8d97a8','#ffffff'], top:['#c7e3ff','#ffffff'], recipe:{snow:3, berry:2}, speed:1.1, gap:88, decoys:true,
+   magic:'snowman', prize:'⛄', line:'Look! The snowman is dancing!'},
+  {icon:'🌙', sky:['#141a45','#40377f'], hills:['#2b2f63','#1f2550'], ground:'#2a3358', night:true,
+   bot:['#3b3f6b','#59609a'], top:['#555c8f','#7a80b8'], recipe:{star:3, moon:1, drop:2}, speed:1.15, gap:88, decoys:true,
+   magic:'fireworks', prize:'🎆', line:'Look! Fireworks!'},
+  {icon:'🌈', sky:['#ffd1ec','#d3ecff'], hills:['#ffe3f3','#e7f4ff'], ground:'#bdf0cc',
+   bot:['#ffffff','#fff3fb'], top:['#ffffff','#f3f9ff'], recipe:{star:2, flower:2, drop:2, feather:1}, speed:1.2, gap:86, decoys:true,
+   magic:'rainbow', prize:'🌈', line:'Look! A rainbow and a unicorn!'},
+];
+
+/* ======== helpers ======== */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+const easeBack = t => { t = clamp(t, 0, 1); const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+const WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
+const Cap = s => s[0].toUpperCase() + s.slice(1);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('witchbrew.' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('witchbrew.' + k, JSON.stringify(v)); }catch(e){} },
+};
+const hexRgb = h => [1,3,5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgbStr = c => `rgb(${c.map(Math.round).join(',')})`;
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+
+/* ======== sound ======== */
+let muted = store.get('muted', false);
+let ac = null, master = null, noiseBuf = null;
+function audio(){
+  if(!ac){
+    try{
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      master = ac.createGain(); master.gain.value = SFX_VOL; master.connect(ac.destination);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }catch(e){ ac = null; return null; }
+  }
+  if(ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function tone(f0, f1, dur, type = 'sine', vol = 1, delay = 0){
+  if(muted || !ac) return;
+  const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t);
+  if(f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
+function noise(dur, freq, vol = 1, type = 'bandpass', delay = 0){
+  if(muted || !ac) return;
+  const t = ac.currentTime + delay, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = noiseBuf; f.type = type; f.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + dur + 0.05);
+}
+const sfx = {
+  flap(){ noise(0.16, 1100, 0.45); },
+  pick(){ tone(880, 880, 0.12, 'triangle', 0.5); tone(1320, 1320, 0.2, 'triangle', 0.5, 0.08); },
+  extra(){ tone(1568, 1568, 0.12, 'triangle', 0.3); },
+  bump(){ tone(260, 110, 0.35, 'triangle', 0.7); noise(0.15, 400, 0.4, 'lowpass'); },
+  boing(){ tone(220, 480, 0.18, 'sine', 0.45); },
+  nope(){ tone(200, 180, 0.1, 'square', 0.2); tone(160, 150, 0.14, 'square', 0.2, 0.12); },
+  splash(){ noise(0.35, 700, 0.8, 'lowpass'); tone(520, 200, 0.2, 'sine', 0.3); },
+  bubble(){ const f = rand(280, 520); tone(f, f * 1.8, 0.08, 'sine', 0.25); },
+  poof(){ noise(0.7, 2600, 0.6, 'highpass'); [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f, 0.32, 'triangle', 0.35, i * 0.07)); },
+  pop(){ noise(0.3, 1500, 0.5); },
+  home(){ [659, 784, 988].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.35, i * 0.1)); },
+};
+
+let voice = null;
+function pickVoice(){
+  if(!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices();
+  voice = vs.find(v => /^en[-_]GB/i.test(v.lang) && /female|serena|kate|libby|sonia|martha|hazel/i.test(v.name))
+       || vs.find(v => /^en[-_]GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+}
+if('speechSynthesis' in window) speechSynthesis.onvoiceschanged = pickVoice;
+function say(text, queue = false){
+  if(muted || !('speechSynthesis' in window)) return;
+  try{
+    if(!queue) speechSynthesis.cancel();
+    if(!voice) pickVoice();
+    const u = new SpeechSynthesisUtterance(text);
+    if(voice) u.voice = voice;
+    u.lang = voice ? voice.lang : 'en-GB'; u.rate = 0.9; u.pitch = 1.2;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ======== canvas and view ======== */
+const cv = $('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0, dpr = 1, scale = 1, vw = 0, vh = 0, safeTop = 0;
+const ground = () => vh - GROUND_H;
+const band = () => ground() - CEIL;
+
+function resize(){
+  let frac = vh ? (witch.y - CEIL) / band() : 0.5;
+  if(!isFinite(frac)) frac = 0.5;
+  W = Math.max(1, innerWidth); H = Math.max(1, innerHeight); dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  scale = Math.min(W, H) / VIEW_MIN; vw = W / scale; vh = H / scale;
+  witch.y = CEIL + frac * band();
+  safeTop = $('safe').offsetHeight || 0;
+}
+
+/* ======== game state ======== */
+let L = 0, lv = LEVELS[0], state = 'menu';
+let cam = 0, spd = 0, fade = 0, time = 0;
+const witch = {y: 90, vy: 0, ang: 0, oops: 0, safe: 0, t: 0, trail: 0};
+let pillars = [], items = [], parts = [], flyers = [];
+let got = {}, shown = {}, complete = false, lastPillarX = 0, nextX = 0, prevCy = 0.5, homeX = 0;
+let brew = null;
+let unlocked = new URLSearchParams(location.search).has('all') ? LEVELS.length : store.get('unlocked', 1);
+
+const witchX = () => cam + vw * WITCH_X;
+const gapCentre = p => CEIL + p.gap / 2 + p.gy * (band() - p.gap);
+const total = () => Object.values(lv.recipe).reduce((a, b) => a + b, 0);
+
+function startLevel(i){
+  L = i; lv = LEVELS[i];
+  cam = 0; spd = 0; time = 0;
+  pillars = []; items = []; parts = []; flyers = []; brew = null;
+  got = {}; shown = {};
+  for(const k in lv.recipe){ got[k] = 0; shown[k] = 0; }
+  complete = false; prevCy = 0.5;
+  Object.assign(witch, {y: CEIL + band() / 2, vy: 0, ang: 0, oops: 0, safe: 0, t: 0});
+  nextX = Math.max(vw + 30, vw * WITCH_X + 170);
+  // one easy ingredient right in front of her, to show what to do
+  items.push({x: vw * WITCH_X + 75, fy: 0.5, kind: Object.keys(lv.recipe)[0], t: 0});
+  spawnAhead();
+  state = 'ready'; fade = 1;
+  $('menu').classList.add('hidden'); $('card').classList.add('hidden');
+  const parts_ = Object.entries(lv.recipe).map(([k, n]) => `${WORDS[n]} ${n > 1 ? ING[k].many : ING[k].one}`);
+  const list = parts_.length > 1 ? parts_.slice(0, -1).join(', ') + ' and ' + parts_[parts_.length - 1] : parts_[0];
+  say(`Find ${list}!`);
+  say('Tap to fly!', true);
+}
+
+/* ======== flying: obstacles and ingredients ======== */
+function wantedKind(){
+  const wx = witchX(), want = [];
+  for(const k in lv.recipe){
+    const ahead = items.filter(it => it.kind === k && !it.taken && it.x > wx).length;
+    for(let n = lv.recipe[k] - got[k] - ahead; n > 0; n--) want.push(k);
+  }
+  return want.length ? pick(want) : null;
+}
+
+function spawnAhead(){
+  while(!complete && nextX < cam + vw + 80){
+    const b = band(), room = b - lv.gap;
+    const prev = pillars[pillars.length - 1];
+    const prevGy = prev ? prev.gy : 0.5;
+    const gy = clamp(prevGy + rand(-1, 1) * Math.min(1, MAX_SHIFT / room), 0, 1);
+    const p = {x: nextX, gy, gap: lv.gap};
+    const cy = (lv.gap / 2 + gy * room) / b;            // gap middle as a fraction of the band
+    if(Math.random() < ITEM_CHANCE){
+      const inGap = Math.random() < 0.4;
+      const x = inGap ? p.x + PILLAR_W / 2 : p.x - (PILLAR_EVERY - PILLAR_W) / 2;
+      const fy = inGap ? cy : clamp((cy + prevCy) / 2 + rand(-0.08, 0.08), 0.1, 0.9);
+      if(lv.decoys && Math.random() < DECOY_CHANCE) items.push({x, fy, decoy: pick(DECOYS), t: rand(0, 6)});
+      else { const k = wantedKind(); if(k) items.push({x, fy, kind: k, t: rand(0, 6)}); }
+    }
+    pillars.push(p); prevCy = cy; nextX += PILLAR_EVERY;
+  }
+}
+
+function hitRect(cx, cy, r, x0, y0, x1, y1){
+  const nx = clamp(cx, x0, x1), ny = clamp(cy, y0, y1);
+  return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r;
+}
+function hits(p, x, y){
+  const gc = gapCentre(p), t = gc - p.gap / 2, b = gc + p.gap / 2;
+  return hitRect(x, y, HIT_R, p.x, -50, p.x + PILLAR_W, t) || hitRect(x, y, HIT_R, p.x, b, p.x + PILLAR_W, vh + 50);
+}
+
+function flap(){
+  witch.vy = -FLAP; sfx.flap();
+  const x = witchX() - 16, y = witch.y + 5;
+  for(let i = 0; i < 4; i++) parts.push({x, y, vx: rand(-30, -10), vy: rand(10, 30), life: 0.4, max: 0.4, c: 'rgba(255,255,255,.8)', s: rand(1.5, 2.5)});
+}
+
+function oops(p){
+  witch.oops = OOPS_TIME; witch.safe = SAFE_TIME;
+  spd = -30;
+  witch.vy = gapCentre(p) > witch.y ? 40 : -70;
+  sfx.bump();
+  if(Math.random() < 0.6) say(pick(['Oops!', 'Whoops!', 'Bump!']));
+  for(let i = 0; i < 8; i++) parts.push({x: witchX(), y: witch.y - 8, vx: rand(-40, 40), vy: rand(-50, 0), g: 120, life: 0.7, max: 0.7, c: '#ffe066', s: rand(1.5, 2.5)});
+}
+
+function take(it){
+  it.taken = true;
+  const wx = witchX();
+  if(it.decoy){
+    it.bat = 0; sfx.nope(); say(it.decoy.say);
+    return;
+  }
+  const k = it.kind, need = lv.recipe[k];
+  if(got[k] >= need){
+    sfx.extra();
+    for(let i = 0; i < 10; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: ING[k].col, s: 2});
+    return;
+  }
+  got[k]++;
+  const slot = hudSlots().find(s => s.kind === k && s.i === got[k] - 1);
+  flyers.push({e: ING[k].e, kind: k, x0: (it.x - cam) * scale, y0: (CEIL + it.fy * band()) * scale, x1: slot.x, y1: slot.y, s1: slot.s, t: 0});
+  sfx.pick();
+  say(Cap(WORDS[got[k]]) + '!');
+  for(let i = 0; i < 8; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: '#fff6a8', s: 2});
+  if(Object.keys(lv.recipe).every(k2 => got[k2] >= lv.recipe[k2])){
+    complete = true; state = 'home';
+    lastPillarX = pillars.length ? pillars[pillars.length - 1].x : wx;
+    homeX = Math.max(lastPillarX + 140, cam + vw + 40);
+    say("That's everything! Fly home!", true);
+  }
+}
+
+function updateFly(dt){
+  witch.t += dt;
+  if(state !== 'ready'){
+    spd += (lv.speed * SPEED - spd) * Math.min(1, dt * 2.5);
+    cam += spd * dt;
+  }
+  const wx = witchX(), g = ground();
+  if(state === 'ready'){
+    witch.y = CEIL + band() / 2 + Math.sin(witch.t * 3) * 4; witch.vy = 0;
+  } else if(state === 'home' && wx > lastPillarX + PILLAR_W + 20){
+    // past the last obstacle: glide down to the cottage on her own
+    const ty = g - 24;
+    witch.vy = (ty - witch.y) * 1.6; witch.y += witch.vy * dt;
+    if(wx >= homeX - 36) startBrew();
+  } else {
+    witch.vy = Math.min(MAX_FALL, witch.vy + GRAVITY * dt);
+    const p = pillars.find(p => p.x + PILLAR_W > wx - 4 && p.x < wx + ASSIST_RANGE);
+    if(p && ASSIST > 0 && witch.oops <= 0) witch.vy += (gapCentre(p) - witch.y) * ASSIST * dt;
+    witch.y += witch.vy * dt;
+    if(witch.y > g - 7){ witch.y = g - 7; witch.vy = -FLAP * 0.75; sfx.boing(); }
+    if(witch.y < CEIL + 4){ witch.y = CEIL + 4; if(witch.vy < 0) witch.vy = 0; }
+    if(witch.safe <= 0) for(const p2 of pillars) if(hits(p2, wx, witch.y - 2)){ oops(p2); break; }
+  }
+  witch.oops = Math.max(0, witch.oops - dt);
+  witch.safe = Math.max(0, witch.safe - dt);
+  const target = clamp(witch.vy / 260, -0.35, 0.45);
+  witch.ang = lerp(witch.ang, target, Math.min(1, dt * 8));
+
+  // sparkly trail from the broom
+  if(state !== 'ready' && (witch.trail -= dt) < 0){
+    witch.trail = 0.05;
+    parts.push({x: wx - 20, y: witch.y + 5 + rand(-2, 2), vx: rand(-20, -5), vy: rand(-5, 5), life: 0.6, max: 0.6, c: pick(['#ffe066', '#ffb3f0', '#b9f2ff']), s: rand(1, 2)});
+  }
+
+  for(const it of items){
+    it.t += dt;
+    if(it.bat != null){ it.bat += dt; continue; }
+    if(it.taken) continue;
+    const iy = CEIL + it.fy * band() + Math.sin(it.t * 3) * 2;
+    if(Math.hypot(it.x - wx, iy - (witch.y - 3)) < PICK_R) take(it);
+  }
+  pillars = pillars.filter(p => p.x > cam - 60);
+  items = items.filter(it => it.x > cam - 60 && !(it.bat > 1.5) && !(it.taken && it.bat == null));
+  spawnAhead();
+}
+
+/* ======== the cauldron ======== */
+function startBrew(){
+  state = 'brew'; fade = 1; parts = []; flyers = [];
+  for(const k in lv.recipe) shown[k] = got[k];
+  const basket = [];
+  for(const k in lv.recipe) for(let i = 0; i < lv.recipe[k]; i++) basket.push({kind: k, e: ING[k].e, state: 0, t: 0});
+  brew = {phase: 'drop', basket, landed: 0, stir: 0, stirSound: 0, t: 0, magicT: 0, liquid: [111, 211, 111], target: [111, 211, 111], fw: 0, snow: 0};
+  sfx.home();
+  say('Tap to put them in the pot!');
+}
+const cauldron = () => ({x: vw * 0.5, y: ground() - 18});
+function basketPos(i){
+  const n = brew.basket.length, sp = Math.min(26, (vw - 30) / n);
+  return {x: vw / 2 + (i - (n - 1) / 2) * sp, y: Math.max(CEIL + 40, ground() - 110)};   // close above the pot on tall screens
+}
+
+function brewTap(){
+  if(brew.phase === 'drop'){
+    const it = brew.basket.find(b => b.state === 0);
+    if(it){ it.state = 1; it.t = 0; tone(600, 900, 0.1, 'sine', 0.3); }
+  } else if(brew.phase === 'stir') brew.stir += STIR_TAP;
+}
+
+function updateBrew(dt){
+  brew.t += dt;
+  const c = cauldron(), mouth = c.y - 14;
+  brew.basket.forEach((b, i) => {
+    if(b.state !== 1) return;
+    b.t += dt / 0.55;
+    if(b.t >= 1){
+      b.state = 2; brew.landed++;
+      brew.target = hexRgb(ING[b.kind].col);
+      sfx.splash();
+      say(Cap(WORDS[brew.landed]) + '!');
+      for(let j = 0; j < 12; j++) parts.push({x: c.x + rand(-8, 8), y: mouth, vx: rand(-40, 40), vy: rand(-90, -40), g: 220, life: 0.7, max: 0.7, c: rgbStr(brew.target), s: rand(1.5, 2.5)});
+      if(brew.landed === brew.basket.length){
+        brew.phase = 'stir';
+        say('Now stir! Round and round!', true);
+      }
+    }
+  });
+  brew.liquid = brew.liquid.map((v, i) => lerp(v, brew.target[i], Math.min(1, dt * 3)));
+
+  // bubbles, more while stirring
+  const rate = brew.phase === 'stir' ? 0.04 + 0.12 * (1 - brew.stir / STIR_NEEDED) : brew.phase === 'magic' ? 0.03 : 0.2;
+  if(Math.random() < dt / rate){
+    const l = brew.liquid.map(v => Math.min(255, v + 50));
+    parts.push({x: c.x + rand(-16, 16), y: mouth, vx: rand(-4, 4), vy: rand(-30, -14), life: 1, max: 1, c: rgbStr(l), s: rand(1.5, 3), ring: true});
+  }
+  if(brew.phase === 'stir'){
+    if(brew.stir - brew.stirSound > 120){ brew.stirSound = brew.stir; sfx.bubble(); }
+    if(brew.stir >= STIR_NEEDED){
+      brew.phase = 'magic'; brew.magicT = 0;
+      sfx.poof(); say('Abracadabra! ' + lv.line);
+      for(let j = 0; j < 40; j++){ const a = rand(0, Math.PI * 2), v = rand(30, 110);
+        parts.push({x: c.x, y: mouth - 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, g: 40, life: 1.2, max: 1.2, c: `hsl(${rand(0, 360)},90%,70%)`, s: rand(1.5, 3)}); }
+    }
+  }
+  if(brew.phase === 'magic'){
+    brew.magicT += dt;
+    const h = (brew.magicT * 120) % 360;
+    brew.target = hexRgb(hslHex(h));
+    if(lv.magic === 'fireworks' && (brew.fw -= dt) < 0){
+      brew.fw = 0.45; sfx.pop();
+      const x = rand(20, vw - 20), y = rand(CEIL + 20, ground() * 0.5), hue = rand(0, 360);
+      for(let j = 0; j < 26; j++){ const a = j / 26 * Math.PI * 2, v = rand(35, 55);
+        parts.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 30, life: 1.1, max: 1.1, c: `hsl(${hue + rand(-20, 20)},95%,65%)`, s: 2}); }
+    }
+    if(lv.magic === 'snowman' && (brew.snow -= dt) < 0){
+      brew.snow = 0.05;
+      parts.push({x: rand(0, vw), y: -4, vx: rand(-6, 6), vy: rand(14, 24), life: 6, max: 6, c: '#ffffff', s: rand(1, 2)});
+    }
+    if(brew.magicT > MAGIC_TIME && state === 'brew') showCard();
+  }
+}
+function hslHex(h){
+  const f = n => { const k = (n + h / 30) % 12, a = 0.8 * 0.4;   // saturation 80%, lightness 60%
+    return Math.round(255 * (0.6 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, '0'); };
+  return '#' + f(0) + f(8) + f(4);
+}
+
+function showCard(){
+  state = 'card';
+  unlocked = Math.max(unlocked, Math.min(LEVELS.length, L + 2));
+  store.set('unlocked', unlocked);
+  $('cardEmoji').textContent = '🧪' + lv.prize;
+  $('bNext').classList.toggle('hidden', L >= LEVELS.length - 1);
+  $('card').classList.remove('hidden');
+}
+
+function showMenu(){
+  state = 'menu'; lv = LEVELS[Math.min(unlocked, LEVELS.length) - 1]; pillars = []; items = []; parts = []; flyers = []; brew = null;
+  try{ speechSynthesis.cancel(); }catch(e){}
+  const box = $('levels'); box.innerHTML = '';
+  LEVELS.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.className = 'lvl'; b.disabled = i >= unlocked;
+    b.innerHTML = `${l.icon}<b>${i < unlocked ? i + 1 : '🔒'}</b>`;
+    b.setAttribute('aria-label', 'Level ' + (i + 1));
+    b.onclick = () => { audio(); startLevel(i); };
+    box.appendChild(b);
+  });
+  $('card').classList.add('hidden'); $('menu').classList.remove('hidden');
+}
+
+/* ======== drawing ======== */
+function emoji(e, x, y, size, alpha = 1){
+  ctx.globalAlpha = alpha;
+  ctx.font = `${size}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(e, x, y);
+  ctx.globalAlpha = 1;
+}
+function hill(x, a, f){ return Math.sin(x * 0.013 * f) * a + Math.sin(x * 0.031 * f + 1) * a * 0.5; }
+
+function drawBackdrop(camX){
+  const g = ground();
+  const sky = ctx.createLinearGradient(0, 0, 0, vh);
+  sky.addColorStop(0, lv.sky[0]); sky.addColorStop(1, lv.sky[1]);
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, vw, vh);
+  if(lv.night){
+    for(let i = 0; i < 70; i++){
+      const sx = ((i * 97.3 - camX * 0.05) % (vw + 20) + vw + 20) % (vw + 20) - 10, sy = (i * 53.7) % (g * 0.8);
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(time * 2 + i);
+      ctx.fillStyle = '#fff'; ctx.fillRect(sx, sy, 1.2, 1.2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff5c8'; ctx.beginPath(); ctx.arc(vw * 0.8, 62, 12, 0, 7); ctx.fill();
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    for(let i = 0; i < 5; i++){
+      const span = vw + 80, cx = ((i * 140 - camX * 0.15) % span + span) % span - 40, cy = 24 + (i * 37) % 50;
+      ctx.beginPath(); ctx.ellipse(cx, cy, 18, 6, 0, 0, 7); ctx.ellipse(cx + 10, cy - 4, 10, 6, 0, 0, 7); ctx.fill();
+    }
+  }
+  [[lv.hills[0], 0.25, 42, 16, 1], [lv.hills[1], 0.5, 20, 9, 1.6]].forEach(([col, par, up, amp, f]) => {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, vh);
+    for(let x = 0; x <= vw + 4; x += 4) ctx.lineTo(x, g - up + hill(x + camX * par, amp, f));
+    ctx.lineTo(vw, vh); ctx.fill();
+  });
+  ctx.fillStyle = lv.ground; ctx.fillRect(0, g, vw, vh - g);
+  ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(0, g, vw, 2);
+  ctx.fillStyle = 'rgba(0,0,0,.1)';
+  for(let i = 0; i < 30; i++){ const span = vw + 20, x = ((i * 37 - camX) % span + span) % span - 10; ctx.fillRect(x, g + 6 + (i * 7) % 10, 3, 1.5); }
+}
+
+function drawPillar(p){
+  const x = p.x - cam, gc = gapCentre(p), t = gc - p.gap / 2, b = gc + p.gap / 2, g = ground();
+  ctx.fillStyle = lv.top[0]; ctx.beginPath(); ctx.roundRect(x, -10, PILLAR_W, t + 10, [0, 0, 8, 8]); ctx.fill();
+  ctx.fillStyle = lv.top[1]; ctx.beginPath(); ctx.ellipse(x + PILLAR_W / 2, t - 3, PILLAR_W / 2 + 5, 6, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = lv.bot[0]; ctx.fillRect(x + 4, b + 6, PILLAR_W - 8, g - b);
+  ctx.fillStyle = lv.bot[1]; ctx.beginPath(); ctx.ellipse(x + PILLAR_W / 2, b + 8, PILLAR_W / 2 + 6, 11, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+function drawWitch(x, y, ang, alpha = 1){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = alpha;
+  const fl = Math.sin(time * 14) * 2;
+  // cape
+  ctx.fillStyle = '#4b2a86'; ctx.beginPath(); ctx.moveTo(-2, -6); ctx.lineTo(-13 - fl, -1); ctx.lineTo(-8, 4); ctx.fill();
+  // broom
+  ctx.strokeStyle = '#8a5a2b'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-13, 5); ctx.lineTo(15, 3); ctx.stroke();
+  ctx.fillStyle = '#e8b04a'; ctx.beginPath(); ctx.moveTo(-12, 2.5); ctx.lineTo(-23, -1 + fl * 0.3); ctx.lineTo(-24, 10); ctx.lineTo(-12, 7.5); ctx.fill();
+  ctx.fillStyle = '#c4862e'; ctx.fillRect(-14, 2.5, 3, 5);
+  // robe and boot
+  ctx.fillStyle = '#7b4bc4'; ctx.beginPath(); ctx.moveTo(-6, 5); ctx.lineTo(5, 5); ctx.lineTo(2, -6); ctx.lineTo(-3, -6); ctx.fill();
+  ctx.fillStyle = '#2a2140'; ctx.beginPath(); ctx.ellipse(5, 7, 3, 1.6, 0, 0, 7); ctx.fill();
+  // hair, face, hat
+  ctx.fillStyle = '#ff8a3d'; ctx.beginPath(); ctx.arc(-2.5, -8, 4.2, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ffd9b3'; ctx.beginPath(); ctx.arc(0.5, -9, 3.8, 0, 7); ctx.fill();
+  ctx.fillStyle = '#2a2140'; ctx.fillRect(2, -10, 1.2, 1.4);
+  ctx.fillStyle = '#ff9aa8'; ctx.fillRect(2.4, -7.6, 1.6, 1);
+  ctx.fillStyle = '#4b2a86'; ctx.beginPath(); ctx.ellipse(0, -12, 7.5, 1.8, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-4, -12); ctx.lineTo(4, -12); ctx.lineTo(-4, -22); ctx.fill();
+  ctx.fillStyle = '#ffd447'; ctx.fillRect(-3.5, -14, 7, 1.6);
+  ctx.restore();
+}
+
+function drawCottage(x){
+  const g = ground();
+  ctx.fillStyle = '#8a5a3c'; ctx.fillRect(x - 22, g - 30, 44, 30);
+  ctx.fillStyle = '#5a3a6e'; ctx.beginPath(); ctx.moveTo(x - 28, g - 28); ctx.lineTo(x, g - 52); ctx.lineTo(x + 28, g - 28); ctx.fill();
+  ctx.fillStyle = '#5a4a4a'; ctx.fillRect(x + 10, g - 50, 6, 14);
+  ctx.fillStyle = '#ffe58a'; ctx.fillRect(x - 15, g - 22, 9, 8);
+  ctx.fillStyle = '#4a2f20'; ctx.fillRect(x + 4, g - 18, 9, 18);
+  for(let i = 0; i < 3; i++){ const k = (time * 0.6 + i / 3) % 1;
+    ctx.fillStyle = `rgba(230,230,240,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(x + 13 + k * 8, g - 54 - k * 22, 3 + k * 4, 0, 7); ctx.fill(); }
+}
+
+function drawFly(){
+  drawBackdrop(cam);
+  if(state === 'home') drawCottage(homeX - cam);
+  pillars.forEach(drawPillar);
+  for(const it of items){
+    const x = it.x - cam, y = CEIL + it.fy * band() + Math.sin(it.t * 3) * 2;
+    if(it.bat != null){
+      ctx.save(); ctx.translate(x + it.bat * 90, y - it.bat * 80 + it.bat * it.bat * 40); ctx.rotate(it.bat * 8);
+      emoji(it.decoy.e, 0, 0, 13, Math.max(0, 1 - it.bat / 1.5)); ctx.restore();
+      continue;
+    }
+    if(it.taken) continue;
+    if(!it.decoy){ ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(x, y, 9 + Math.sin(it.t * 5), 0, 7); ctx.fill(); }
+    emoji(it.decoy ? it.decoy.e : ING[it.kind].e, x, y, 13);
+  }
+  drawParts(cam);
+  const wx = witchX() - cam;
+  const flicker = witch.safe > 0 && witch.oops <= 0 ? (Math.sin(time * 30) > 0 ? 1 : 0.4) : 1;
+  drawWitch(wx, witch.y, witch.ang + (witch.oops > 0 ? (1 - witch.oops / OOPS_TIME) * Math.PI * 2 : 0), flicker);
+  if(witch.oops > 0) emoji('💫', wx, witch.y - 24, 10);
+}
+
+function drawParts(camX){
+  for(const p of parts){
+    const a = clamp(p.life / p.max, 0, 1);
+    ctx.globalAlpha = a;
+    if(p.ring){ ctx.strokeStyle = p.c; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(p.x - camX, p.y, p.s, 0, 7); ctx.stroke(); }
+    else { ctx.fillStyle = p.c; ctx.fillRect(p.x - camX - p.s / 2, p.y - p.s / 2, p.s, p.s); }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBrew(){
+  drawBackdrop(cam);
+  const c = cauldron(), g = ground(), mouth = c.y - 14, m = brew.phase === 'magic' ? brew.magicT : -1;
+  drawCottage(c.x - 70 < 30 ? -100 : c.x - 95);
+  // the thing the potion will change
+  const sx = c.x + Math.min(58, vw * 0.32);
+  if(lv.magic === 'frog'){
+    const hop = m > 0.8 ? Math.abs(Math.sin((m - 0.8) * 6)) * 10 : 0;
+    emoji('🐸', sx, g - 9 - hop, 18);
+    if(m >= 0) emoji('👑', sx, lerp(-20, g - 25, ease(m / 0.8)) - (m > 0.8 ? hop : 0), 12);
+  }
+  if(lv.magic === 'pumpkin'){
+    const s = 18 * (1 + 1.5 * (m >= 0 ? easeBack(m / 1.2) : 0));
+    emoji('🎃', sx, g - s * 0.45, s);
+  }
+  if(lv.magic === 'snowman'){
+    ctx.save(); ctx.translate(sx, g - 12 - (m >= 0 ? Math.abs(Math.sin(m * 7)) * 6 : 0)); ctx.rotate(m >= 0 ? Math.sin(m * 7) * 0.3 : 0);
+    emoji('⛄', 0, 0, 24); ctx.restore();
+  }
+  if(lv.magic === 'flowers' && m >= 0){
+    for(let i = 0; i < 10; i++){ const s = 15 * easeBack((m - i * 0.12) / 0.6);
+      if(s > 0.5) emoji(['🌷', '🌻', '🌼'][i % 3], (i + 0.5) * vw / 10, g + 2 - s * 0.45, s); }
+  }
+  if(lv.magic === 'rainbow' && m >= 0){
+    const R = Math.min(vw * 0.46, g - CEIL - 20), cols = ['#ff5a5a', '#ffa64d', '#ffe04d', '#5fd36b', '#4fa8ff', '#9a6bff'];
+    ctx.lineWidth = R * 0.07;
+    cols.forEach((col, i) => { ctx.strokeStyle = col; ctx.beginPath();
+      ctx.arc(vw / 2, g, R - i * R * 0.07, Math.PI, Math.PI + Math.PI * ease(m / 1.5)); ctx.stroke(); });
+    if(m > 1) emoji('🦄', lerp(-20, vw + 20, (m - 1) / 3), g - R - 4 + Math.sin(m * 5) * 4, 20);
+  }
+  // fire, pot, liquid
+  ctx.fillStyle = '#ff9a3c';
+  for(let i = -2; i <= 2; i++){ const h = 6 + Math.sin(time * 12 + i * 2) * 2;
+    ctx.beginPath(); ctx.moveTo(c.x + i * 7 - 4, g); ctx.lineTo(c.x + i * 7, g - h); ctx.lineTo(c.x + i * 7 + 4, g); ctx.fill(); }
+  ctx.fillStyle = '#2b2b3a'; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 18, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#3d3d52'; ctx.beginPath(); ctx.ellipse(c.x, mouth, 24, 6, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = rgbStr(brew.liquid); ctx.beginPath(); ctx.ellipse(c.x, mouth, 20, 4.2, 0, 0, 7); ctx.fill();
+  // spoon
+  if(brew.phase !== 'drop'){
+    const a = brew.stir / 70;
+    ctx.strokeStyle = '#a0703a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(c.x + Math.cos(a) * 10, mouth + Math.sin(a) * 2.5); ctx.lineTo(c.x + Math.cos(a) * 16, mouth - 26); ctx.stroke();
+  }
+  drawWitch(c.x - Math.min(48, vw * 0.27), g - 24 + Math.sin(time * 3) * 2, 0);
+  // the basket of ingredients waiting at the top
+  brew.basket.forEach((b, i) => {
+    const p = basketPos(i);
+    if(b.state === 0){
+      const next = brew.basket.findIndex(q => q.state === 0) === i;
+      emoji(b.e, p.x, p.y + (next ? Math.sin(time * 6) * 2 : 0), 16);
+    } else if(b.state === 1){
+      const t = b.t, x = lerp(p.x, c.x, t), y = lerp(p.y, mouth, t) - Math.sin(t * Math.PI) * 30;
+      emoji(b.e, x, y, 16 * (1 - 0.4 * t));
+    }
+  });
+  drawParts(0);
+  // hints
+  if(brew.phase === 'drop' && brew.basket.some(b => b.state === 0) && brew.t > 1.2){
+    const i = brew.basket.findIndex(b => b.state === 0), p = basketPos(i);
+    emoji('👆', p.x + 6, p.y + 20 + Math.sin(time * 6) * 3, 14);
+  }
+  if(brew.phase === 'stir'){
+    ctx.save(); ctx.translate(c.x, mouth - 34); ctx.rotate(time * 3);
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 1.6); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(10, -1); ctx.lineTo(6, 4); ctx.lineTo(14, 4); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(c.x - 25, c.y + 22, 50, 4);
+    ctx.fillStyle = '#ffd447'; ctx.fillRect(c.x - 25, c.y + 22, 50 * clamp(brew.stir / STIR_NEEDED, 0, 1), 4);
+  }
+}
+
+function hudSlots(){
+  const kinds = Object.keys(lv.recipe), n = total();
+  const avail = Math.max(160, W - 130);
+  const s = clamp(avail / (n * 1.15 + (kinds.length - 1) * 0.6), 22, 40);
+  const width = n * s * 1.15 + (kinds.length - 1) * s * 0.6;
+  let x = W / 2 - width / 2 + s * 0.575;
+  const y = safeTop + 32, slots = [];
+  kinds.forEach((k, ki) => {
+    for(let i = 0; i < lv.recipe[k]; i++){ slots.push({kind: k, i, x, y, s}); x += s * 1.15; }
+    x += s * 0.6;
+  });
+  return slots;
+}
+
+function drawHud(){
+  if(state !== 'ready' && state !== 'fly' && state !== 'home') return;
+  const slots = hudSlots(), s = slots[0].s;
+  const x0 = slots[0].x - s * 0.7, x1 = slots[slots.length - 1].x + s * 0.7;
+  ctx.fillStyle = 'rgba(255,248,236,.85)'; ctx.beginPath(); ctx.roundRect(x0, slots[0].y - s * 0.68, x1 - x0, s * 1.36, s * 0.68); ctx.fill();
+  for(const sl of slots){
+    const filled = sl.i < shown[sl.kind];
+    if(!filled){ ctx.fillStyle = 'rgba(42,33,64,.1)'; ctx.beginPath(); ctx.arc(sl.x, sl.y, s * 0.48, 0, 7); ctx.fill(); }
+    emoji(ING[sl.kind].e, sl.x, sl.y + 1, s * 0.8, filled ? 1 : 0.3);
+  }
+  for(const f of flyers){
+    const t = ease(f.t), x = lerp(f.x0, f.x1, t), y = lerp(f.y0, f.y1, t) - Math.sin(t * Math.PI) * 40;
+    emoji(f.e, x, y, lerp(13 * scale, f.s * 0.8, t));
+  }
+  if(state === 'ready'){
+    const x = (witchX() - cam) * scale, y = (witch.y + 26) * scale;
+    emoji('👆', x, y + Math.sin(time * 6) * 6, 34);
+  }
+}
+
+/* ======== main loop ======== */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
+  if(state === 'menu' || state === 'card'){
+    if(state === 'menu') cam += 18 * dt;
+  }
+  if(state === 'ready' || state === 'fly' || state === 'home') updateFly(dt);
+  else if(state === 'brew' || (state === 'card' && brew)) updateBrew(dt);
+  for(const p of parts){ p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; if(p.g) p.vy += p.g * dt; }
+  parts = parts.filter(p => p.life > 0);
+  for(const f of flyers){ f.t += dt / 0.7; if(f.t >= 1){ shown[f.kind]++; } }
+  flyers = flyers.filter(f => f.t < 1);
+  fade = Math.max(0, fade - dt * 2.5);
+
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  if(state === 'brew' || (state === 'card' && brew)) drawBrew();
+  else if(state === 'menu'){
+    drawBackdrop(cam);
+    drawWitch(vw * 0.5 + Math.sin(time * 0.7) * vw * 0.3, vh * 0.72 + Math.sin(time * 1.6) * 10, Math.cos(time * 1.6) * 0.15);
+  }
+  else drawFly();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawHud();
+  if(fade > 0){ ctx.fillStyle = `rgba(255,255,255,${fade})`; ctx.fillRect(0, 0, W, H); }
+  requestAnimationFrame(frame);
+}
+
+/* ======== input ======== */
+let down = false, lastP = null;
+function tap(){
+  if(state === 'ready'){ state = 'fly'; flap(); }
+  else if(state === 'fly' || (state === 'home' && witchX() <= lastPillarX + PILLAR_W + 20)) flap();
+  else if(state === 'brew') brewTap();
+}
+cv.addEventListener('pointerdown', e => { e.preventDefault(); audio(); down = true; lastP = {x: e.clientX, y: e.clientY}; tap(); });
+cv.addEventListener('pointermove', e => {
+  if(!down || state !== 'brew' || brew.phase !== 'stir') return;
+  brew.stir += Math.hypot(e.clientX - lastP.x, e.clientY - lastP.y);
+  lastP = {x: e.clientX, y: e.clientY};
+});
+addEventListener('pointerup', () => { down = false; });
+addEventListener('pointercancel', () => { down = false; });
+addEventListener('keydown', e => {
+  if(e.repeat || !(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter')) return;
+  if(state === 'menu' || state === 'card') return;
+  e.preventDefault(); audio(); tap();
+});
+$('home').addEventListener('pointerdown', e => e.stopPropagation());
+$('sound').addEventListener('pointerdown', e => e.stopPropagation());
+function paintSound(){ $('sound').textContent = muted ? '🔇' : '🔊'; }
+$('sound').onclick = () => {
+  muted = !muted; store.set('muted', muted); paintSound();
+  if(muted){ try{ speechSynthesis.cancel(); }catch(e){} } else { audio(); sfx.pick(); }
+};
+$('bMap').onclick = showMenu;
+$('bAgain').onclick = () => { audio(); startLevel(L); };
+$('bNext').onclick = () => { audio(); startLevel(Math.min(L + 1, LEVELS.length - 1)); };
+
+addEventListener('resize', resize);
+resize(); paintSound(); showMenu();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
