@@ -7,9 +7,11 @@ everything into the cauldron, stir it, and the potion does something magic.
 It plays like Flappy Bird, but nothing can go wrong: bumping into a tree only makes her spin and
 say "Oops!", and the level goes on until the potion is complete.
 
-**This is the grey-box prototype**: everything is drawn with simple shapes and emoji so the flying
-can be tried out on a phone before any pixel art is made. The PixelLab pictures come next (see the
-plan below).
+**Work in progress**: the witch (with her black cat), the cottage and cauldron, and the whole
+first level (the meadow) are pixel art made with PixelLab. The other levels still use simple shapes
+and emoji for their trees, clouds and ingredients until their pictures are made (see the plan below).
+The world is drawn on a small pixel canvas and blown up by whole pixels, so the shapes drawn in code
+look pixelated too and match the pictures.
 
 ## How it plays
 
@@ -55,7 +57,8 @@ At the top of the script in `index.html`:
 
 | Knob | What it does |
 | --- | --- |
-| `VIEW_MIN` | Game units across the short side of the screen (smaller = bigger witch) |
+| `VIEW_MIN` | At least this many game pixels across the short side of the screen (smaller = bigger witch). Each game pixel is a whole number of screen pixels, so the real view is a little bigger on some screens |
+| `ASSET_V` | Bump after changing any picture in `assets/`, so browsers fetch the new one |
 | `GRAVITY`, `FLAP`, `MAX_FALL` | How fast she drops, how high a tap lifts her, and her slowest-possible glide |
 | `SPEED` | Flying speed (each level multiplies it by its `speed`) |
 | `PILLAR_EVERY`, `PILLAR_W` | Distance between obstacles, and how wide they are |
@@ -66,21 +69,20 @@ At the top of the script in `index.html`:
 | `ITEM_CHANCE`, `DECOY_CHANCE` | How often an ingredient appears between obstacles, and how often a sock or shoe does instead |
 | `STIR_NEEDED`, `STIR_TAP` | How much stirring finishes the potion, and how much one tap counts |
 | `MAGIC_TIME` | How long the potion's magic plays before the end card |
-| `ING`, `DECOYS` | The ingredients (picture, words for the voice, potion colour) and the things to avoid |
-| `LEVELS` | Per level: colours, recipe, `speed`, `gap` (height of the gaps), `decoys`, and the magic |
+| `ING`, `DECOYS` | The ingredients (emoji, PixelLab picture if there is one, words for the voice, potion colour) and the things to avoid |
+| `LEVELS` | Per level: colours, recipe, `speed`, `gap` (height of the gaps), `decoys`, the magic, and `art` (its PixelLab background strips, tree crown, bark and cloud) |
 
 ## The plan from here
 
-1. **Grey box** (this): try the flying with a five-year-old on a phone and tune `FLAP`, `GRAVITY`,
+1. **Grey box**: try the flying with a five-year-old on a phone and tune `FLAP`, `GRAVITY`,
    `SPEED`, `gap` and `ASSIST` until it's easy and fun.
 2. **Pixel art with PixelLab** (ask before each batch, with the cost):
-   - The witch on her broom, seen from the side (`create_character`), with flying, swoop (tap),
-     dizzy (bump) and happy animations, plus standing-and-stirring for the cauldron.
-   - The ingredients and the sock and shoe: one small `create_image_pixflux` picture each.
-   - The obstacles for each level (tree trunks with crowns, hanging branches, clouds, rocks and
-     icicles, mushrooms) and the cottage, cauldron, frog, pumpkin and snowman.
-   - Parallax background strips per level, cut out and mirrored like Nut Run's, and one shared
-     palette (Nut Run's `art-src/palette.py`) so everything matches the witch.
+   - Done: the witch, cottage, cauldron, and level 1 (meadow hills and grass strips, tree crown,
+     bark, cloud, flower).
+   - Next: the other ingredients and the sock and shoe (one small picture each), each level's
+     obstacles and background strips, and the frog, crown, pumpkin, snowman and unicorn for the magic.
+   - Maybe: a flying animation for the witch (cape and hair fluttering), and one shared palette
+     (like Nut Run's `art-src/palette.py`) once all the pictures are in.
 3. **Sound**: synthesized effects and speech for now. Recorded ElevenLabs lines (counting, "Find
    three flowers!") or Eleven Music only if asked for.
 4. **Finish**: offline support (manifest, `sw.js`, icons), list it on the landing page, publish to
@@ -88,5 +90,24 @@ At the top of the script in `index.html`:
 
 ## Credits
 
-Everything is drawn in code for now (the ingredients are emoji); the sounds and the voice are made
-by the browser.
+Pictures: made with [PixelLab](https://pixellab.ai) (listed below). The rest is drawn in code or is
+emoji for now; the sounds and the voice are made by the browser.
+
+### Picture credits
+
+All made on 2026-10-18 with PixelLab's `create_image_pixflux` (trial account, paid credits; PixelLab's
+terms let us use and share them freely, with no attribution needed). The untouched originals are in
+`art-src/`; `python art-src/prep.py` (run from this folder) cuts them out and trims them into
+`assets/` (then bump `ASSET_V`).
+
+- `assets/witch.png`: a little witch in a green dress with a black cat, flying a broom to the right
+  (one of three tries; the other two, `art-src/witch-a.png` and `witch-b.png`, aren't used).
+  The game tilts her with how she's flying and spins her when she bumps into something.
+- `assets/cottage.png`, `assets/cauldron.png`: the witch's cottage (the chimney smoke is drawn in
+  code) and an empty cauldron (the potion inside, the fire under it and the spoon are drawn in code).
+- `assets/ing-flower.png`: the pink flower ingredient.
+- Level 1: `assets/bg-meadow-far.png` (distant hills; PixelLab painted a sky behind them, which the
+  script cuts out) and `bg-meadow-near.png` (the grass and flowers along the bottom), each shown next
+  to its mirror image so it repeats without a seam; `crown-meadow.png` (cropped off a whole tree),
+  `bark-oak.png` (stacked up each trunk) and `cloud.png` (piled up for the hanging obstacles, and
+  small and see-through far away).

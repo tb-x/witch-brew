@@ -85,7 +85,8 @@
 <script>
 'use strict';
 /* ======== tuning knobs ======== */
-const VIEW_MIN = 180;        // game units across the short side of the screen (smaller = bigger witch)
+const ASSET_V = 1;           // bump after changing any picture in assets/
+const VIEW_MIN = 180;        // at least this many game pixels across the short side of the screen (smaller = bigger witch)
 const CEIL = 8;              // soft ceiling, units below the top edge
 const GROUND_H = 20;         // height of the ground strip
 const WITCH_X = 0.3;         // where the witch flies across the screen (0 = left edge, 1 = right)
@@ -94,7 +95,7 @@ const FLAP = 100;            // upward speed one tap gives
 const MAX_FALL = 70;         // she never drops faster than this, so she glides
 const SPEED = 40;            // flying speed in units/s, times each level's `speed`
 const PILLAR_EVERY = 125;    // distance from one obstacle to the next
-const PILLAR_W = 22;         // obstacle width
+const PILLAR_W = 24;         // obstacle width (what she bumps; leafy crowns stick out past it harmlessly)
 const MAX_SHIFT = 45;        // most a gap moves up or down from one obstacle to the next
 const ASSIST = 2;            // gentle pull towards the middle of the next gap (0 = off)
 const ASSIST_RANGE = 70;     // how far ahead the pull starts
@@ -110,7 +111,7 @@ const MAGIC_TIME = 4.5;      // seconds the potion's magic plays before the end 
 const SFX_VOL = 0.35;        // loudness of the beeps
 
 const ING = {
-  flower:   {e:'🌸', one:'flower',     many:'flowers',     col:'#ff8fc8'},
+  flower:   {e:'🌸', one:'flower',     many:'flowers',     col:'#ff8fc8', img:'ing-flower'},
   mushroom: {e:'🍄', one:'mushroom',   many:'mushrooms',   col:'#e8473f'},
   berry:    {e:'🫐', one:'blueberry',  many:'blueberries', col:'#5560e0'},
   leaf:     {e:'🍁', one:'leaf',       many:'leaves',      col:'#e8762b'},
@@ -123,9 +124,11 @@ const ING = {
 };
 const DECOYS = [{e:'🧦', say:'A smelly sock? No thanks!'}, {e:'👟', say:'An old shoe? No thanks!'}];
 
-// sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours
+// sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours (the grey-box look);
+// art: PixelLab pictures that replace them where a level has its own
 const LEVELS = [
   {icon:'🌼', sky:['#8fd3ff','#e6f6ff'], hills:['#a6dc8f','#7cc66a'], ground:'#6bb35a',
+   art:{far:'bg-meadow-far', near:'bg-meadow-near', crown:'crown-meadow', trunk:'bark-oak', cloud:'cloud'},
    bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96,
    magic:'flowers', prize:'🌷', line:'Look! The flowers are growing!'},
   {icon:'🌲', sky:['#9fdcc0','#eafff3'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
@@ -230,8 +233,12 @@ function say(text, queue = false){
 }
 
 /* ======== canvas and view ======== */
-const cv = $('cv'), ctx = cv.getContext('2d');
-let W = 0, H = 0, dpr = 1, scale = 1, vw = 0, vh = 0, safeTop = 0;
+// The world is drawn one game unit = one pixel into a small canvas (`buf`, drawn with `ctx`), then
+// blown up onto the screen canvas (`sctx`) by a whole number of device pixels, so every pixel is square.
+// The recipe bar and fades are drawn sharp on the screen canvas on top.
+const cv = $('cv'), sctx = cv.getContext('2d');
+const buf = document.createElement('canvas'), ctx = buf.getContext('2d');
+let W = 0, H = 0, dpr = 1, dev = 1, scale = 1, vw = 0, vh = 0, safeTop = 0;
 const ground = () => vh - GROUND_H;
 const band = () => ground() - CEIL;
 
@@ -240,10 +247,34 @@ function resize(){
   if(!isFinite(frac)) frac = 0.5;
   W = Math.max(1, innerWidth); H = Math.max(1, innerHeight); dpr = Math.min(window.devicePixelRatio || 1, 3);
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-  scale = Math.min(W, H) / VIEW_MIN; vw = W / scale; vh = H / scale;
+  dev = Math.max(1, Math.floor(Math.min(cv.width, cv.height) / VIEW_MIN));   // device pixels per game pixel
+  scale = dev / dpr;                                                          // CSS pixels per game pixel
+  vw = Math.ceil(cv.width / dev); vh = Math.ceil(cv.height / dev);
+  buf.width = vw; buf.height = vh; ctx.imageSmoothingEnabled = false;
   witch.y = CEIL + frac * band();
   safeTop = $('safe').offsetHeight || 0;
 }
+
+/* ======== pictures ======== */
+const ART = {};
+function loadArt(names){
+  for(const n of names){
+    const im = new Image();
+    im.onload = () => {
+      ART[n] = im;
+      if(n.startsWith('bg-')){   // backgrounds repeat as picture + mirror image, so they join without a seam
+        const c = document.createElement('canvas'), g = c.getContext('2d');
+        c.width = im.width * 2; c.height = im.height;
+        g.drawImage(im, 0, 0); g.translate(c.width, 0); g.scale(-1, 1); g.drawImage(im, 0, 0);
+        ART[n + '-tile'] = c;
+      }
+    };
+    im.src = `assets/${n}.png?v=${ASSET_V}`;
+  }
+}
+loadArt(['witch', 'cottage', 'cauldron', 'cloud', 'ing-flower', 'crown-meadow', 'bark-oak', 'bg-meadow-far', 'bg-meadow-near']);
+const R = Math.round;
+function sprite(n, x, y, c = ctx){ const im = ART[n]; c.drawImage(im, R(x - im.width / 2), R(y - im.height / 2)); }
 
 /* ======== game state ======== */
 let L = 0, lv = LEVELS[0], state = 'menu';
@@ -414,9 +445,9 @@ function startBrew(){
   sfx.home();
   say('Tap to put them in the pot!');
 }
-const cauldron = () => ({x: vw * 0.5, y: ground() - 18});
+const cauldron = () => ({x: R(vw * 0.5), y: ground() - 24});
 function basketPos(i){
-  const n = brew.basket.length, sp = Math.min(26, (vw - 30) / n);
+  const n = brew.basket.length, sp = Math.min(28, (vw - 30) / n);
   return {x: vw / 2 + (i - (n - 1) / 2) * sp, y: Math.max(CEIL + 40, ground() - 110)};   // close above the pot on tall screens
 }
 
@@ -510,11 +541,20 @@ function showMenu(){
 }
 
 /* ======== drawing ======== */
-function emoji(e, x, y, size, alpha = 1){
-  ctx.globalAlpha = alpha;
-  ctx.font = `${size}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(e, x, y);
-  ctx.globalAlpha = 1;
+function emoji(e, x, y, size, alpha = 1, c = ctx){
+  c.globalAlpha = alpha;
+  c.font = `${size}px ${EMOJI_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(e, x, y);
+  c.globalAlpha = 1;
+}
+// an ingredient: its PixelLab picture when it has one (full size in the world, `size` wide on the screen canvas), else its emoji
+function ingredient(kind, x, y, size, alpha = 1, c = ctx){
+  const im = ART[ING[kind].img];
+  if(!im) return emoji(ING[kind].e, x, y, size, alpha, c);
+  c.globalAlpha = alpha;
+  if(c === ctx) c.drawImage(im, R(x - im.width / 2), R(y - im.height / 2));
+  else { c.imageSmoothingEnabled = false; c.drawImage(im, x - size / 2, y - size / 2, size, size); }
+  c.globalAlpha = 1;
 }
 function hill(x, a, f){ return Math.sin(x * 0.013 * f) * a + Math.sin(x * 0.031 * f + 1) * a * 0.5; }
 
@@ -531,6 +571,14 @@ function drawBackdrop(camX){
     }
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#fff5c8'; ctx.beginPath(); ctx.arc(vw * 0.8, 62, 12, 0, 7); ctx.fill();
+  } else if(ART.cloud){
+    // small, slow, half-see-through clouds far away (the big ones in front are obstacles)
+    ctx.globalAlpha = 0.7;
+    for(let i = 0; i < 4; i++){
+      const span = vw + 140, cx = ((i * 170 - camX * 0.12) % span + span) % span - 70, cy = 34 + (i * 41) % 60;
+      ctx.drawImage(ART.cloud, R(cx), R(cy), 30, 18);
+    }
+    ctx.globalAlpha = 1;
   } else {
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     for(let i = 0; i < 5; i++){
@@ -538,19 +586,42 @@ function drawBackdrop(camX){
       ctx.beginPath(); ctx.ellipse(cx, cy, 18, 6, 0, 0, 7); ctx.ellipse(cx + 10, cy - 4, 10, 6, 0, 0, 7); ctx.fill();
     }
   }
-  [[lv.hills[0], 0.25, 42, 16, 1], [lv.hills[1], 0.5, 20, 9, 1.6]].forEach(([col, par, up, amp, f]) => {
+  const art = lv.art || {};
+  if(ART[art.far + '-tile']) strip(ART[art.far + '-tile'], camX * 0.3, g - ART[art.far].height + 6);
+  else [[lv.hills[0], 0.25, 42, 16, 1], [lv.hills[1], 0.5, 20, 9, 1.6]].forEach(([col, par, up, amp, f]) => {
     ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, vh);
     for(let x = 0; x <= vw + 4; x += 4) ctx.lineTo(x, g - up + hill(x + camX * par, amp, f));
     ctx.lineTo(vw, vh); ctx.fill();
   });
+  if(ART[art.near + '-tile']){ strip(ART[art.near + '-tile'], camX, g - 16); return; }
   ctx.fillStyle = lv.ground; ctx.fillRect(0, g, vw, vh - g);
   ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(0, g, vw, 2);
   ctx.fillStyle = 'rgba(0,0,0,.1)';
   for(let i = 0; i < 30; i++){ const span = vw + 20, x = ((i * 37 - camX) % span + span) % span - 10; ctx.fillRect(x, g + 6 + (i * 7) % 10, 3, 1.5); }
 }
 
+// a repeating background strip, scrolled by `off`, with its top at `y`
+function strip(img, off, y){
+  const w = img.width;
+  for(let x = -(((R(off) % w) + w) % w); x < vw; x += w) ctx.drawImage(img, x, R(y));
+}
+
 function drawPillar(p){
-  const x = p.x - cam, gc = gapCentre(p), t = gc - p.gap / 2, b = gc + p.gap / 2, g = ground();
+  const x = p.x - cam, gc = gapCentre(p), t = gc - p.gap / 2, b = gc + p.gap / 2, g = ground(), art = lv.art || {};
+  const cx = x + PILLAR_W / 2;
+  if(ART[art.trunk] && ART[art.crown] && ART[art.cloud]){
+    // a tree growing up from the ground: bark stacked up to a leafy crown at the gap
+    const bark = ART[art.trunk], crown = ART[art.crown], cloud = ART[art.cloud];
+    for(let y = R(b + crown.height - 10); y < g + 4; y += bark.height) ctx.drawImage(bark, R(cx - bark.width / 2), y);
+    ctx.drawImage(crown, R(cx - crown.width / 2), R(b - 4));
+    // a pile of clouds hanging down from the sky, the lowest one at the gap
+    let i = 0;
+    for(let y = t - cloud.height + 6; y > -cloud.height; y -= 20, i++){
+      const dx = (i % 2 ? 5 : -5) + ((p.x / PILLAR_EVERY) % 2 ? 2 : -2);
+      ctx.drawImage(cloud, R(cx - cloud.width / 2 + dx), R(y));
+    }
+    return;
+  }
   ctx.fillStyle = lv.top[0]; ctx.beginPath(); ctx.roundRect(x, -10, PILLAR_W, t + 10, [0, 0, 8, 8]); ctx.fill();
   ctx.fillStyle = lv.top[1]; ctx.beginPath(); ctx.ellipse(x + PILLAR_W / 2, t - 3, PILLAR_W / 2 + 5, 6, 0, 0, 7); ctx.fill();
   ctx.fillStyle = lv.bot[0]; ctx.fillRect(x + 4, b + 6, PILLAR_W - 8, g - b);
@@ -559,6 +630,13 @@ function drawPillar(p){
 }
 
 function drawWitch(x, y, ang, alpha = 1){
+  if(ART.witch){
+    // the body (her dress) is at (28, 30) in the picture; tilt by whole steps so the pixels stay tidy
+    ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.round(ang / 0.08) * 0.08); ctx.globalAlpha = alpha;
+    ctx.drawImage(ART.witch, -28, -30);
+    ctx.restore();
+    return;
+  }
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = alpha;
   const fl = Math.sin(time * 14) * 2;
   // cape
@@ -584,6 +662,12 @@ function drawWitch(x, y, ang, alpha = 1){
 
 function drawCottage(x){
   const g = ground();
+  if(ART.cottage){
+    ctx.drawImage(ART.cottage, R(x - 40), R(g + 6 - ART.cottage.height));
+    for(let i = 0; i < 3; i++){ const k = (time * 0.6 + i / 3) % 1;   // smoke from the chimney
+      ctx.fillStyle = `rgba(235,235,245,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(R(x + 16 + k * 10), R(g - 74 - k * 24), R(3 + k * 4), 0, 7); ctx.fill(); }
+    return;
+  }
   ctx.fillStyle = '#8a5a3c'; ctx.fillRect(x - 22, g - 30, 44, 30);
   ctx.fillStyle = '#5a3a6e'; ctx.beginPath(); ctx.moveTo(x - 28, g - 28); ctx.lineTo(x, g - 52); ctx.lineTo(x + 28, g - 28); ctx.fill();
   ctx.fillStyle = '#5a4a4a'; ctx.fillRect(x + 10, g - 50, 6, 14);
@@ -605,14 +689,16 @@ function drawFly(){
       continue;
     }
     if(it.taken) continue;
-    if(!it.decoy){ ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(x, y, 9 + Math.sin(it.t * 5), 0, 7); ctx.fill(); }
-    emoji(it.decoy ? it.decoy.e : ING[it.kind].e, x, y, 13);
+    if(it.decoy){ emoji(it.decoy.e, x, y, 13); continue; }
+    const big = !!ART[ING[it.kind].img];
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(R(x), R(y), (big ? 13 : 9) + Math.sin(it.t * 5), 0, 7); ctx.fill();
+    ingredient(it.kind, x, y, 13);
   }
   drawParts(cam);
   const wx = witchX() - cam;
   const flicker = witch.safe > 0 && witch.oops <= 0 ? (Math.sin(time * 30) > 0 ? 1 : 0.4) : 1;
   drawWitch(wx, witch.y, witch.ang + (witch.oops > 0 ? (1 - witch.oops / OOPS_TIME) * Math.PI * 2 : 0), flicker);
-  if(witch.oops > 0) emoji('💫', wx, witch.y - 24, 10);
+  if(witch.oops > 0) emoji('💫', wx + 4, witch.y - (ART.witch ? 36 : 24), 10);
 }
 
 function drawParts(camX){
@@ -649,35 +735,42 @@ function drawBrew(){
       if(s > 0.5) emoji(['🌷', '🌻', '🌼'][i % 3], (i + 0.5) * vw / 10, g + 2 - s * 0.45, s); }
   }
   if(lv.magic === 'rainbow' && m >= 0){
-    const R = Math.min(vw * 0.46, g - CEIL - 20), cols = ['#ff5a5a', '#ffa64d', '#ffe04d', '#5fd36b', '#4fa8ff', '#9a6bff'];
-    ctx.lineWidth = R * 0.07;
+    const rad = Math.min(vw * 0.46, g - CEIL - 20), cols = ['#ff5a5a', '#ffa64d', '#ffe04d', '#5fd36b', '#4fa8ff', '#9a6bff'];
+    ctx.lineWidth = rad * 0.07;
     cols.forEach((col, i) => { ctx.strokeStyle = col; ctx.beginPath();
-      ctx.arc(vw / 2, g, R - i * R * 0.07, Math.PI, Math.PI + Math.PI * ease(m / 1.5)); ctx.stroke(); });
-    if(m > 1) emoji('🦄', lerp(-20, vw + 20, (m - 1) / 3), g - R - 4 + Math.sin(m * 5) * 4, 20);
+      ctx.arc(vw / 2, g, rad - i * rad * 0.07, Math.PI, Math.PI + Math.PI * ease(m / 1.5)); ctx.stroke(); });
+    if(m > 1) emoji('🦄', lerp(-20, vw + 20, (m - 1) / 3), g - rad - 4 + Math.sin(m * 5) * 4, 20);
   }
   // fire, pot, liquid
   ctx.fillStyle = '#ff9a3c';
   for(let i = -2; i <= 2; i++){ const h = 6 + Math.sin(time * 12 + i * 2) * 2;
     ctx.beginPath(); ctx.moveTo(c.x + i * 7 - 4, g); ctx.lineTo(c.x + i * 7, g - h); ctx.lineTo(c.x + i * 7 + 4, g); ctx.fill(); }
-  ctx.fillStyle = '#2b2b3a'; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 18, 0, 0, 7); ctx.fill();
-  ctx.fillStyle = '#3d3d52'; ctx.beginPath(); ctx.ellipse(c.x, mouth, 24, 6, 0, 0, 7); ctx.fill();
-  ctx.fillStyle = rgbStr(brew.liquid); ctx.beginPath(); ctx.ellipse(c.x, mouth, 20, 4.2, 0, 0, 7); ctx.fill();
+  if(ART.cauldron){
+    // the pot's opening is centred at (25, 6) in the picture
+    ctx.drawImage(ART.cauldron, R(c.x - 25), R(mouth - 6));
+    ctx.fillStyle = rgbStr(brew.liquid); ctx.beginPath(); ctx.ellipse(R(c.x), R(mouth) + 0.5, 18, 3.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(R(c.x - 9), R(mouth - 2), 6, 1);
+  } else {
+    ctx.fillStyle = '#2b2b3a'; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 18, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3d3d52'; ctx.beginPath(); ctx.ellipse(c.x, mouth, 24, 6, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = rgbStr(brew.liquid); ctx.beginPath(); ctx.ellipse(c.x, mouth, 20, 4.2, 0, 0, 7); ctx.fill();
+  }
   // spoon
   if(brew.phase !== 'drop'){
     const a = brew.stir / 70;
     ctx.strokeStyle = '#a0703a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(c.x + Math.cos(a) * 10, mouth + Math.sin(a) * 2.5); ctx.lineTo(c.x + Math.cos(a) * 16, mouth - 26); ctx.stroke();
   }
-  drawWitch(c.x - Math.min(48, vw * 0.27), g - 24 + Math.sin(time * 3) * 2, 0);
+  drawWitch(c.x - Math.min(52, vw * 0.29), g - (ART.witch ? 34 : 24) + Math.sin(time * 3) * 2, 0);
   // the basket of ingredients waiting at the top
   brew.basket.forEach((b, i) => {
     const p = basketPos(i);
     if(b.state === 0){
       const next = brew.basket.findIndex(q => q.state === 0) === i;
-      emoji(b.e, p.x, p.y + (next ? Math.sin(time * 6) * 2 : 0), 16);
+      ingredient(b.kind, p.x, p.y + (next ? Math.sin(time * 6) * 2 : 0), 16);
     } else if(b.state === 1){
       const t = b.t, x = lerp(p.x, c.x, t), y = lerp(p.y, mouth, t) - Math.sin(t * Math.PI) * 30;
-      emoji(b.e, x, y, 16 * (1 - 0.4 * t));
+      ingredient(b.kind, x, y, 16 * (1 - 0.4 * t));
     }
   });
   drawParts(0);
@@ -715,19 +808,19 @@ function drawHud(){
   if(state !== 'ready' && state !== 'fly' && state !== 'home') return;
   const slots = hudSlots(), s = slots[0].s;
   const x0 = slots[0].x - s * 0.7, x1 = slots[slots.length - 1].x + s * 0.7;
-  ctx.fillStyle = 'rgba(255,248,236,.85)'; ctx.beginPath(); ctx.roundRect(x0, slots[0].y - s * 0.68, x1 - x0, s * 1.36, s * 0.68); ctx.fill();
+  sctx.fillStyle = 'rgba(255,248,236,.85)'; sctx.beginPath(); sctx.roundRect(x0, slots[0].y - s * 0.68, x1 - x0, s * 1.36, s * 0.68); sctx.fill();
   for(const sl of slots){
     const filled = sl.i < shown[sl.kind];
-    if(!filled){ ctx.fillStyle = 'rgba(42,33,64,.1)'; ctx.beginPath(); ctx.arc(sl.x, sl.y, s * 0.48, 0, 7); ctx.fill(); }
-    emoji(ING[sl.kind].e, sl.x, sl.y + 1, s * 0.8, filled ? 1 : 0.3);
+    if(!filled){ sctx.fillStyle = 'rgba(42,33,64,.1)'; sctx.beginPath(); sctx.arc(sl.x, sl.y, s * 0.48, 0, 7); sctx.fill(); }
+    ingredient(sl.kind, sl.x, sl.y + 1, s * 0.8, filled ? 1 : 0.3, sctx);
   }
   for(const f of flyers){
     const t = ease(f.t), x = lerp(f.x0, f.x1, t), y = lerp(f.y0, f.y1, t) - Math.sin(t * Math.PI) * 40;
-    emoji(f.e, x, y, lerp(13 * scale, f.s * 0.8, t));
+    ingredient(f.kind, x, y, lerp((ART[ING[f.kind].img] ? 24 : 13) * scale, f.s1 * 0.8, t), 1, sctx);
   }
   if(state === 'ready'){
-    const x = (witchX() - cam) * scale, y = (witch.y + 26) * scale;
-    emoji('👆', x, y + Math.sin(time * 6) * 6, 34);
+    const x = (witchX() - cam) * scale, y = (witch.y + 30) * scale;
+    emoji('👆', x, y + Math.sin(time * 6) * 6, 34, 1, sctx);
   }
 }
 
@@ -746,16 +839,18 @@ function frame(now){
   flyers = flyers.filter(f => f.t < 1);
   fade = Math.max(0, fade - dt * 2.5);
 
-  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   if(state === 'brew' || (state === 'card' && brew)) drawBrew();
   else if(state === 'menu'){
     drawBackdrop(cam);
     drawWitch(vw * 0.5 + Math.sin(time * 0.7) * vw * 0.3, vh * 0.72 + Math.sin(time * 1.6) * 10, Math.cos(time * 1.6) * 0.15);
   }
   else drawFly();
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.imageSmoothingEnabled = false;
+  sctx.drawImage(buf, 0, 0, vw * dev, vh * dev);
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawHud();
-  if(fade > 0){ ctx.fillStyle = `rgba(255,255,255,${fade})`; ctx.fillRect(0, 0, W, H); }
+  if(fade > 0){ sctx.fillStyle = `rgba(255,255,255,${fade})`; sctx.fillRect(0, 0, W, H); }
   requestAnimationFrame(frame);
 }
 
