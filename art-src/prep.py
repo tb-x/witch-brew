@@ -1,5 +1,6 @@
 """Turn the PixelLab originals in art-src/ into the game's pictures in assets/.
 
+Every picture is drawn at 2 pixels per game unit (the game's ART_RES).
 Run from the game folder:  python art-src/prep.py
 Then bump ASSET_V in index.html.
 """
@@ -9,7 +10,7 @@ from PIL import Image
 
 SRC = Path(__file__).resolve().parent
 OUT = SRC.parent / 'assets'
-NEAR_SOLID = 40   # the near strips are cropped so their first solid row (the grass line) is this far down
+NEAR_SOLID = 80   # the near strips are cropped so their first solid row (the grass line) is this far down
 
 
 def load(name):
@@ -26,10 +27,10 @@ def rows(im):
     return [sum(1 for x in range(w) if a[x, y]) for y in range(h)]
 
 
-def cut_sky(im, tol=14):
+def cut_sky(im, tol=12):
     """PixelLab paints a sky behind landscape strips. Flood-fill it away from the top row, stepping only
-    to neighbours of a similar colour (so banded skies go too), then drop anything left floating
-    (a sun, stray stars) that doesn't reach the bottom."""
+    to neighbours of a similar colour (so gradient skies go too), then drop anything left floating
+    that doesn't reach the bottom."""
     w, h = im.size
     src = im.load()
     out = im.copy()
@@ -49,7 +50,6 @@ def cut_sky(im, tol=14):
                 if a2 == 0 or max(abs(r - r2), abs(g - g2), abs(b - b2)) <= tol:
                     seen[nx][ny] = True
                     todo.append((nx, ny))
-    # keep only what is joined to the bottom row
     keep = [[False] * h for _ in range(w)]
     todo = deque((x, h - 1) for x in range(w) if px[x, h - 1][3])
     for x, y in todo:
@@ -78,14 +78,15 @@ def near(im, solid=None):
     return out
 
 
-def scale_rgb(im, k):
-    out = im.copy()
-    px = out.load()
-    for y in range(out.height):
-        for x in range(out.width):
-            r, g, b, a = px[x, y]
-            px[x, y] = (min(255, int(r * k[0])), min(255, int(g * k[1])), min(255, int(b * k[2])), a)
-    return out
+def no_sun(im, rows_down):
+    """Paint a (pale yellow) sun over with the colour of its sky band, or the mirrored repeat would show two suns."""
+    px = im.load()
+    for y in range(rows_down):
+        for x in range(im.width):
+            r, g, b, _ = px[x, y]
+            if r > 235 and g > 225:
+                px[x, y] = px[0, y]
+    return im
 
 
 def mean_rgb(im):
@@ -97,9 +98,26 @@ def mean_rgb(im):
 
 
 def bottom_colour(im):
-    w, h = im.size
+    w = im.width
     y = max(y for y, n in enumerate(rows(im)) if n >= w * 0.9)
     return '#%02x%02x%02x' % tuple(int(c) for c in mean_rgb(im.crop((0, y - 3, w, y + 1))))
+
+
+def sheet(frames):
+    """Frames side by side, all cropped to the box that holds every frame, so they line up."""
+    boxes = [f.getchannel('A').getbbox() for f in frames]
+    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+    w, h = box[2] - box[0], box[3] - box[1]
+    out = Image.new('RGBA', (w * len(frames), h), (0, 0, 0, 0))
+    for i, f in enumerate(frames):
+        out.alpha_composite(f.crop(box), (i * w, 0))
+    print(f'   {len(frames)} frames of {w}x{h}, crop box {box}')
+    return out
+
+
+def centre(im, width):
+    x = (im.width - width) // 2
+    return im.crop((x, 0, x + width, im.height))
 
 
 def save(im, name):
@@ -108,60 +126,54 @@ def save(im, name):
     print(f'{name}.png', im.size)
 
 
-# characters, props and ingredients
-save(trim(load('witch-c')), 'witch')
+# the witch and her friends
+save(sheet([Image.open(SRC / 'frames' / f'witch-{i}.png').convert('RGBA') for i in range(8)]), 'witch-fly')
+save(sheet([Image.open(SRC / 'frames' / f'cat-{i}.png').convert('RGBA') for i in range(8)]), 'cat')
+for n in ('frog-crown', 'lantern', 'owl'):
+    save(trim(load(n)), n)
+save(trim(load('unicorn')).transpose(Image.FLIP_LEFT_RIGHT), 'unicorn')   # it faced left; it flies to the right
 save(trim(load('cottage')), 'cottage')
 save(trim(load('cauldron')), 'cauldron')
+
+# ingredients and the things to avoid
 for n in ('flower', 'mushroom', 'berry', 'leaf', 'apple', 'feather', 'snow', 'star', 'moon', 'drop'):
     save(trim(load(n)), f'ing-{n}')
-for n in ('sock', 'shoe', 'frog', 'pumpkin', 'snowman', 'unicorn'):
+for n in ('sock', 'shoe'):
     save(trim(load(n)), n)
-save(trim(load('crown-gold')), 'gold-crown')
 
 # obstacles: a cap at the gap, a body stacked down to the ground, and a pile hanging from the sky
-save(trim(load('crown').crop((0, 0, 80, 45))), 'crown-meadow')       # leaves only, off a whole tree
-save(load('bark').crop((5, 0, 29, 128)), 'bark-oak')
+save(trim(load('crown').crop((0, 0, 160, 86))), 'crown-meadow')      # leaves only, off a whole tree
+save(trim(load('bark')), 'bark-oak')
 save(trim(load('cloud')), 'cloud')
-save(trim(load('crown-forest').crop((0, 0, 64, 55))), 'fir')          # without the patch of earth
-save(trim(load('bark-dark').crop((0, 0, 32, 116))), 'bark-dark')      # without the roots
-save(trim(load('leaves-forest')), 'vines')
+save(trim(load('fir').crop((0, 0, 128, 112))), 'fir')                 # without its stump
+save(trim(load('bark-dark')), 'bark-dark')
+save(trim(load('vines')), 'vines')
 save(trim(load('hay-top')), 'hay-top')
-save(trim(load('hay-top').crop((0, 17, 48, 43))), 'hay-bale')        # the bale without its pumpkin
+save(trim(load('hay-top').crop((0, 30, 96, 85))), 'hay-bale')         # the bale without its pumpkin
 save(trim(load('leaves-autumn')), 'leaves-autumn')
-rock_top = trim(load('rock-top').crop((0, 0, 48, 41)))                # without the snow at its foot
-save(rock_top, 'rock-top')
-rock = load('rock')
-want, have = mean_rgb(rock_top.crop((0, rock_top.height // 2, rock_top.width, rock_top.height))), mean_rgb(rock)
-save(scale_rgb(rock, [w / h for w, h in zip(want, have)]), 'rock')  # matched to the snowy top's darker grey
+save(trim(load('rock-top')), 'rock-top')
+save(centre(trim(load('rock')), 48), 'rock')                          # a little narrower than the snowy top
 save(trim(load('cloud-snow')), 'cloud-snow')
-save(trim(load('tower-top').crop((0, 0, 48, 29))), 'tower-roof')      # the roof off a little tower
-save(trim(load('tower').crop((0, 0, 32, 87))), 'tower')
+save(trim(load('tower-roof').crop((0, 0, 96, 68))), 'tower-roof')     # the roof off a little tower
+save(centre(load('tower'), 44), 'tower')                              # a little narrower than the roof
 save(trim(load('cloud-night')), 'cloud-night')
 save(trim(load('cloud-pink')), 'cloud-pink')
 
-# background strips: far hills (sky cut away) and the ground along the bottom
-for lvl in ('meadow', 'forest', 'autumn', 'snow', 'night'):
-    far = 'hills-far' if lvl == 'meadow' else f'hills-{lvl}-far'
-    nr = 'hills-near' if lvl == 'meadow' else f'hills-{lvl}-near'
-    if lvl == 'autumn':
-        # its banded sunset sky is too stripy to cut out, so it stays (the level's sky matches its top row);
-        # the sun is painted over with its band's colour, or the mirrored repeat would show two suns
-        im = load(far)
-        px = im.load()
-        for y in range(60):
-            for x in range(im.width):
-                if min(px[x, y][:3]) > 225:
-                    px[x, y] = px[0, y]
-        save(im, f'bg-{lvl}-far')
-        print('   autumn sky top', '#%02x%02x%02x' % px[0, 0][:3])
+# background strips: far hills and the ground along the bottom
+for lvl in ('meadow', 'forest', 'autumn', 'snow', 'night', 'rainbow'):
+    far = load(f'hills-{lvl}-far')
+    if lvl in ('autumn', 'night', 'rainbow'):
+        # stripy or starry skies don't cut out cleanly: they stay, and the level's sky matches their top row
+        if lvl == 'autumn':
+            no_sun(far, 160)
+        save(far, f'bg-{lvl}-far')
+        print('   sky top', '#%02x%02x%02x' % far.getpixel((0, 0))[:3])
     else:
-        save(trim(cut_sky(load(far))), f'bg-{lvl}-far')
-    strip = near(load(nr))
+        save(trim(cut_sky(far)), f'bg-{lvl}-far')
+    nr = load(f'hills-{lvl}-near')
+    if lvl == 'rainbow':
+        strip = near(nr.crop((0, 112, 400, 160)), solid=8)              # just the band of flowers
+    else:
+        strip = near(cut_sky(nr))
     save(strip, f'bg-{lvl}-near')
     print('   ground colour', bottom_colour(strip))
-# the rainbow hills are clouds on a pastel sky: keep their sky (the level's sky matches its top row)
-rb = load('hills-rainbow-far')
-save(rb, 'bg-rainbow-far')
-print('   rainbow sky top', '#%02x%02x%02x' % rb.getpixel((0, 0))[:3], 'bottom', '#%02x%02x%02x' % rb.getpixel((0, 119))[:3])
-# the rainbow ground has a hole in the middle: use its left part (the game mirrors it)
-save(near(load('hills-rainbow-near').crop((0, 0, 172, 80)), solid=72), 'bg-rainbow-near')

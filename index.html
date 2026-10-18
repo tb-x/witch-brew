@@ -85,17 +85,19 @@
 <script>
 'use strict';
 /* ======== tuning knobs ======== */
-const ASSET_V = 2;           // bump after changing any picture in assets/
-const VIEW_MIN = 180;        // at least this many game pixels across the short side of the screen (smaller = bigger witch)
+const ASSET_V = 3;           // bump after changing any picture or sound in assets/
+const VIEW_MIN = 180;        // at least this many game units across the short side of the screen (smaller = bigger witch)
+const RES = 2;               // picture pixels per game unit (the PixelLab pictures are drawn at this size)
 const CEIL = 8;              // soft ceiling, units below the top edge
 const GROUND_H = 20;         // height of the ground strip
 const WITCH_X = 0.3;         // where the witch flies across the screen (0 = left edge, 1 = right)
+const WITCH_FPS = 8;         // frames a second of her flying animation (the cat's tail is a little slower)
 const GRAVITY = 240;         // units/s² pulling her down
 const FLAP = 100;            // upward speed one tap gives
 const MAX_FALL = 70;         // she never drops faster than this, so she glides
 const SPEED = 40;            // flying speed in units/s, times each level's `speed`
 const PILLAR_EVERY = 125;    // distance from one obstacle to the next
-const PILLAR_W = 24;         // obstacle width (what she bumps; leafy crowns stick out past it harmlessly)
+const PILLAR_W = 26;         // obstacle width (what she bumps; leafy crowns stick out past it harmlessly)
 const MAX_SHIFT = 45;        // most a gap moves up or down from one obstacle to the next
 const ASSIST = 2;            // gentle pull towards the middle of the next gap (0 = off)
 const ASSIST_RANGE = 70;     // how far ahead the pull starts
@@ -107,8 +109,12 @@ const ITEM_CHANCE = 0.75;    // chance of an ingredient between two obstacles (w
 const DECOY_CHANCE = 0.3;    // chance of a sock or shoe instead, on levels with `decoys`
 const STIR_NEEDED = 900;     // screen pixels of stirring (dragging) to finish the potion
 const STIR_TAP = 150;        // a tap counts as this much stirring
-const MAGIC_TIME = 4.5;      // seconds the potion's magic plays before the end card
-const SFX_VOL = 0.35;        // loudness of the beeps
+const MAGIC_TIME = 5;        // seconds the potion's magic plays before the end card
+const SFX_VOL = 0.5;         // loudness of the sound effects
+const VOICE_VOL = 1;         // loudness of the voice (each clip is evened out first)
+const MUSIC_VOL = 0.28;      // loudness of the music
+const MUSIC_DUCK = 0.35;     // the music dips to this much of itself while the voice talks
+const MUSIC_XFADE = 2;       // seconds of the track's end blended into its start, so the loop has no seam
 
 const ING = {
   flower:   {e:'🌸', one:'flower',     many:'flowers',     col:'#ff8fc8', img:'ing-flower'},
@@ -122,39 +128,67 @@ const ING = {
   moon:     {e:'🌙', one:'moon',       many:'moons',       col:'#ffe58a', img:'ing-moon'},
   drop:     {e:'💧', one:'water drop', many:'water drops', col:'#4fb3ff', img:'ing-drop'},
 };
-const DECOYS = [{e:'🧦', img:'sock', say:'A smelly sock? No thanks!'}, {e:'👟', img:'shoe', say:'An old shoe? No thanks!'}];
+const DECOYS = [{e:'🧦', img:'sock', say:'sock'}, {e:'👟', img:'shoe', say:'shoe'}];
 
-// sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours (the grey-box look,
-// used until the pictures load). art: the level's PixelLab pictures: `far` and `near` background strips,
-// `soil` (the colour under the near strip), and the obstacles: a `cap` at the gap (`capScale` times bigger),
-// a `body` stacked from it to the ground (`bodyStep` makes it a wobbly pile instead of a column),
-// and a `top` piled up from the gap into the sky, `topStep` apart
-const LEVELS = [
-  {icon:'🌼', sky:['#8fd3ff','#e6f6ff'], hills:['#a6dc8f','#7cc66a'], ground:'#6bb35a',
-   art:{far:'bg-meadow-far', near:'bg-meadow-near', soil:'#6f4534', cap:'crown-meadow', body:'bark-oak', top:'cloud'},
-   bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96,
-   magic:'flowers', prize:'🌷', line:'Look! The flowers are growing!'},
-  {icon:'🌲', sky:['#7fdcae','#e4fff0'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
-   art:{far:'bg-forest-far', near:'bg-forest-near', soil:'#191d2b', cap:'fir', body:'bark-dark', top:'vines', topStep:30},
-   bot:['#6b4428','#2f7a3a'], top:['#2f7a3a','#3d9447'], recipe:{mushroom:2, berry:2}, speed:1, gap:92,
-   magic:'frog', prize:'🐸', line:'Look! The frog has a crown!'},
-  {icon:'🎃', sky:['#f5a640','#f5a640'], hills:['#c98a4a','#8a6a2f'], ground:'#6b7a32',
-   art:{far:'bg-autumn-far', near:'bg-autumn-near', soil:'#542629', cap:'hay-top', body:'hay-bale', bodyStep:22, top:'leaves-autumn', topStep:22},
-   bot:['#7a5230','#e07a2a'], top:['#b46a3a','#7a4a2a'], recipe:{leaf:2, apple:2, feather:1}, speed:1.05, gap:90, decoys:true,
-   magic:'pumpkin', prize:'🎃', line:'Look! The pumpkin is growing big!'},
-  {icon:'⛄', sky:['#bcdcff','#f4f9ff'], hills:['#e3eefa','#cfdff0'], ground:'#f2f7ff',
-   art:{far:'bg-snow-far', near:'bg-snow-near', soil:'#3c566c', cap:'rock-top', body:'rock', top:'cloud-snow', topStep:24},
-   bot:['#8d97a8','#ffffff'], top:['#c7e3ff','#ffffff'], recipe:{snow:3, berry:2}, speed:1.1, gap:88, decoys:true,
-   magic:'snowman', prize:'⛄', line:'Look! The snowman is dancing!'},
-  {icon:'🌙', sky:['#141a45','#40377f'], hills:['#2b2f63','#1f2550'], ground:'#2a3358', night:true,
-   art:{far:'bg-night-far', near:'bg-night-near', soil:'#020a38', cap:'tower-roof', capScale:2, body:'tower', top:'cloud-night', topStep:22},
-   bot:['#3b3f6b','#59609a'], top:['#555c8f','#7a80b8'], recipe:{star:3, moon:1, drop:2}, speed:1.15, gap:88, decoys:true,
-   magic:'fireworks', prize:'🎆', line:'Look! Fireworks!'},
-  {icon:'🌈', sky:['#dce5fc','#dce5fc'], hills:['#ffe3f3','#e7f4ff'], ground:'#bdf0cc',
-   art:{far:'bg-rainbow-far', near:'bg-rainbow-near', soil:'#fcb7e1', cap:'cloud-pink', body:'cloud-pink', bodyStep:18, top:'cloud-pink', topStep:20},
-   bot:['#ffffff','#fff3fb'], top:['#ffffff','#f3f9ff'], recipe:{star:2, flower:2, drop:2, feather:1}, speed:1.2, gap:86, decoys:true,
-   magic:'rainbow', prize:'🌈', line:'Look! A rainbow and a unicorn!'},
+// The friend each level's potion adds to the broom, in order. `img` is its picture, `frames` how many
+// animation frames it has, and (x, y) where it sits in the witch's flying picture, in picture pixels:
+// the middle of its feet (or, for the hanging lantern, the middle of its top). Stars and the rainbow are trails.
+const FRIENDS = [
+  {name:'cat',     img:'cat', frames:8, x:22, y:70, behind:true, emoji:'🐈‍⬛'},
+  {name:'frog',    img:'frog-crown', x:88, y:62, emoji:'🐸'},
+  {name:'lantern', img:'lantern', x:103, y:60, hang:true, emoji:'🎃'},
+  {name:'owl',     img:'owl', x:66, y:27, emoji:'🦉'},
+  {name:'stars',   trail:'stars', emoji:'✨'},
+  {name:'unicorn', img:'unicorn', trail:'rainbow', emoji:'🦄'},
 ];
+// the witch's flying picture (assets/witch-fly.png, 8 frames): where her body is, and how high the broom
+// sits in each frame (so her passengers bob with it), in picture pixels
+const RIDER = {frames: 8, body: [52, 62], broom: [61, 61, 60, 58, 58, 58, 58, 59], trail: [6, 80]};
+
+// sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours (the simple look,
+// used until the pictures load). art: the level's PixelLab pictures: `far` and `near` background strips,
+// `soil` (the colour under the near strip), and the obstacles: a `cap` at the gap, a `body` stacked from it
+// to the ground (`bodyStep` makes it a wobbly pile instead of a column), and a `top` piled up from the gap
+// into the sky, `topStep` apart. magic: what else happens when the potion is ready.
+const LEVELS = [
+  {icon:'🌼', sky:['#bfe7ff','#f4fbe2'], hills:['#a6dc8f','#7cc66a'], ground:'#6bb35a',
+   art:{far:'bg-meadow-far', near:'bg-meadow-near', soil:'#764d52', cap:'crown-meadow', body:'bark-oak', top:'cloud'},
+   bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96, magic:'flowers'},
+  {icon:'🌲', sky:['#a6e8c2','#c8f2c0'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
+   art:{far:'bg-forest-far', near:'bg-forest-near', soil:'#051831', cap:'fir', body:'bark-dark', top:'vines', topStep:30},
+   bot:['#6b4428','#2f7a3a'], top:['#2f7a3a','#3d9447'], recipe:{mushroom:2, berry:2}, speed:1, gap:92},
+  {icon:'🎃', sky:['#9e8b94','#9e8b94'], hills:['#c98a4a','#8a6a2f'], ground:'#6b7a32',
+   art:{far:'bg-autumn-far', near:'bg-autumn-near', soil:'#482a0a', cap:'hay-top', body:'hay-bale', bodyStep:22, top:'leaves-autumn', topStep:22},
+   bot:['#7a5230','#e07a2a'], top:['#b46a3a','#7a4a2a'], recipe:{leaf:2, apple:2, feather:1}, speed:1.05, gap:90, decoys:true},
+  {icon:'⛄', sky:['#c6e4f5','#e4f1f7'], hills:['#e3eefa','#cfdff0'], ground:'#f2f7ff',
+   art:{far:'bg-snow-far', near:'bg-snow-near', soil:'#9ab2be', cap:'rock-top', body:'rock', top:'cloud-snow', topStep:26},
+   bot:['#8d97a8','#ffffff'], top:['#c7e3ff','#ffffff'], recipe:{snow:3, berry:2}, speed:1.1, gap:88, decoys:true, magic:'snow'},
+  {icon:'🌙', sky:['#060d24','#060d24'], hills:['#2b2f63','#1f2550'], ground:'#2a3358', night:true,
+   art:{far:'bg-night-far', near:'bg-night-near', soil:'#030d1e', cap:'tower-roof', body:'tower', top:'cloud-night', topStep:24},
+   bot:['#3b3f6b','#59609a'], top:['#555c8f','#7a80b8'], recipe:{star:3, moon:1, drop:2}, speed:1.15, gap:88, decoys:true, magic:'fireworks'},
+  {icon:'🌈', sky:['#ecd8f5','#ecd8f5'], hills:['#ffe3f3','#e7f4ff'], ground:'#bdf0cc',
+   art:{far:'bg-rainbow-far', near:'bg-rainbow-near', soil:'#756892', cap:'cloud-pink', body:'cloud-pink', bodyStep:18, top:'cloud-pink', topStep:20},
+   bot:['#ffffff','#fff3fb'], top:['#ffffff','#f3f9ff'], recipe:{star:2, flower:2, drop:2, feather:1}, speed:1.2, gap:86, decoys:true, magic:'rainbow'},
+];
+
+// Every spoken line: the key names its clip (assets/say-<key>.mp3); the text is said by the device's own
+// voice if the clip can't load.
+const LINES = {
+  'find-1': 'Find three flowers!', 'find-2': 'Find two mushrooms and two blueberries!',
+  'find-3': 'Find two leaves, two apples and one feather!', 'find-4': 'Find three snowflakes and two blueberries!',
+  'find-5': 'Find three stars, one moon and two water drops!', 'find-6': 'Find two stars, two flowers, two water drops and one feather!',
+  tap: 'Tap to fly!', n1: 'One!', n2: 'Two!', n3: 'Three!', n4: 'Four!', n5: 'Five!', n6: 'Six!', n7: 'Seven!',
+  oops: 'Oops!', whoops: 'Whoops!', bump: 'Bump!', sock: 'A smelly sock? No thanks!', shoe: 'An old shoe? No thanks!',
+  home: "That's everything! Fly home!", pot: 'Tap to put them in the pot!', stir: 'Now stir! Round and round!',
+  'magic-1': 'Abracadabra! A black cat! She wants to fly with you!',
+  'magic-2': 'Abracadabra! A frog with a crown! He wants to fly with you!',
+  'magic-3': 'Abracadabra! A pumpkin lantern for your broom!',
+  'magic-4': 'Abracadabra! A snowy owl! It wants to fly with you!',
+  'magic-5': 'Abracadabra! Your broom sparkles with stars!',
+  'magic-6': 'Abracadabra! A rainbow, and a unicorn! Hooray!',
+  hooray: 'Hooray!',
+};
+const SFX_KEYS = ['flap', 'pick', 'bump', 'boing', 'nope', 'splash', 'bubble', 'poof', 'pop', 'home', 'jump'];
 
 /* ======== helpers ======== */
 const $ = id => document.getElementById(id);
@@ -164,8 +198,6 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const easeBack = t => { t = clamp(t, 0, 1); const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
-const WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
-const Cap = s => s[0].toUpperCase() + s.slice(1);
 const store = {
   get(k, d){ try{ const v = localStorage.getItem('witchbrew.' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem('witchbrew.' + k, JSON.stringify(v)); }catch(e){} },
@@ -174,75 +206,148 @@ const hexRgb = h => [1,3,5].map(i => parseInt(h.slice(i, i + 2), 16));
 const rgbStr = c => `rgb(${c.map(Math.round).join(',')})`;
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
-/* ======== sound ======== */
+/* ======== sound: ElevenLabs clips, with browser-made stand-ins ========
+   The files start downloading as soon as the page opens and are decoded once the first tap unlocks audio.
+   A sound effect that isn't ready is made in the browser instead, and a line that can't load is said by
+   the device's own voice. */
 let muted = store.get('muted', false);
-let ac = null, master = null, noiseBuf = null;
+let ac = null, out = null, sfxBus = null, voiceIn = null, musicBus = null, noiseBuf = null;
+const FILES = {}, CLIPS = {}, READY = {}, GAINS = {};
+const fetchClip = name => { const p = fetch(`assets/${name}.mp3?v=${ASSET_V}`).then(r => { if(!r.ok) throw 0; return r.arrayBuffer(); }); p.catch(() => {}); return p; };
+for(const k in LINES) FILES['say-' + k] = fetchClip('say-' + k);
+for(const k of SFX_KEYS) FILES['sfx-' + k] = fetchClip('sfx-' + k);
+FILES.music = fetchClip('music');
+
 function audio(){
   if(!ac){
     try{
       ac = new (window.AudioContext || window.webkitAudioContext)();
-      master = ac.createGain(); master.gain.value = SFX_VOL; master.connect(ac.destination);
+      out = ac.createGain(); out.gain.value = muted ? 0 : 1; out.connect(ac.destination);
+      sfxBus = ac.createGain(); sfxBus.gain.value = SFX_VOL; sfxBus.connect(out);
+      const comp = ac.createDynamicsCompressor();   // evens out the voice so every line is clear
+      comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.2;
+      const vb = ac.createGain(); vb.gain.value = VOICE_VOL; comp.connect(vb).connect(out); voiceIn = comp;
+      musicBus = ac.createGain(); musicBus.gain.value = MUSIC_VOL; musicBus.connect(out);
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      for(const k in FILES){
+        READY[k] = FILES[k].then(b => new Promise((ok, no) => ac.decodeAudioData(b.slice(0), ok, no)))
+          .then(buf => {
+            CLIPS[k] = buf;
+            if(k.startsWith('say-')){ let peak = 0.01; const ch = buf.getChannelData(0); for(let i = 0; i < ch.length; i += 4) peak = Math.max(peak, Math.abs(ch[i])); GAINS[k] = Math.min(4, 0.8 / peak); }
+          })
+          .catch(() => { CLIPS[k] = null; });
+      }
+      Music.start();
     }catch(e){ ac = null; return null; }
   }
   if(ac.state === 'suspended') ac.resume();
   return ac;
 }
 function tone(f0, f1, dur, type = 'sine', vol = 1, delay = 0){
-  if(muted || !ac) return;
+  if(!ac) return;
   const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.setValueAtTime(f0, t);
   if(f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + dur + 0.05);
 }
 function noise(dur, freq, vol = 1, type = 'bandpass', delay = 0){
-  if(muted || !ac) return;
+  if(!ac) return;
   const t = ac.currentTime + delay, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
   s.buffer = noiseBuf; f.type = type; f.frequency.value = freq;
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + dur + 0.05);
+  s.connect(f).connect(g).connect(sfxBus); s.start(t); s.stop(t + dur + 0.05);
+}
+// play a recorded effect, or its browser-made stand-in until the recording is ready
+function play(key, standIn, vol = 1, rate = 1){
+  if(!ac) return;
+  const b = CLIPS['sfx-' + key];
+  if(!b){ standIn(); return; }
+  const s = ac.createBufferSource(), g = ac.createGain();
+  s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol;
+  s.connect(g).connect(sfxBus); s.start();
 }
 const sfx = {
-  flap(){ noise(0.16, 1100, 0.45); },
-  pick(){ tone(880, 880, 0.12, 'triangle', 0.5); tone(1320, 1320, 0.2, 'triangle', 0.5, 0.08); },
+  flap(){ play('flap', () => noise(0.16, 1100, 0.45), 0.7, rand(0.92, 1.08)); },
+  pick(){ play('pick', () => { tone(880, 880, 0.12, 'triangle', 0.5); tone(1320, 1320, 0.2, 'triangle', 0.5, 0.08); }); },
   extra(){ tone(1568, 1568, 0.12, 'triangle', 0.3); },
-  bump(){ tone(260, 110, 0.35, 'triangle', 0.7); noise(0.15, 400, 0.4, 'lowpass'); },
-  boing(){ tone(220, 480, 0.18, 'sine', 0.45); },
-  nope(){ tone(200, 180, 0.1, 'square', 0.2); tone(160, 150, 0.14, 'square', 0.2, 0.12); },
-  splash(){ noise(0.35, 700, 0.8, 'lowpass'); tone(520, 200, 0.2, 'sine', 0.3); },
-  bubble(){ const f = rand(280, 520); tone(f, f * 1.8, 0.08, 'sine', 0.25); },
-  poof(){ noise(0.7, 2600, 0.6, 'highpass'); [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f, 0.32, 'triangle', 0.35, i * 0.07)); },
-  pop(){ noise(0.3, 1500, 0.5); },
-  home(){ [659, 784, 988].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.35, i * 0.1)); },
+  bump(){ play('bump', () => { tone(260, 110, 0.35, 'triangle', 0.7); noise(0.15, 400, 0.4, 'lowpass'); }); },
+  boing(){ play('boing', () => tone(220, 480, 0.18, 'sine', 0.45), 0.8); },
+  nope(){ play('nope', () => { tone(200, 180, 0.1, 'square', 0.2); tone(160, 150, 0.14, 'square', 0.2, 0.12); }); },
+  splash(){ play('splash', () => { noise(0.35, 700, 0.8, 'lowpass'); tone(520, 200, 0.2, 'sine', 0.3); }, 1, rand(0.9, 1.1)); },
+  bubble(){ play('bubble', () => { const f = rand(280, 520); tone(f, f * 1.8, 0.08, 'sine', 0.25); }, 0.7, rand(0.85, 1.2)); },
+  poof(){ play('poof', () => { noise(0.7, 2600, 0.6, 'highpass'); [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f, 0.32, 'triangle', 0.35, i * 0.07)); }); },
+  pop(){ play('pop', () => noise(0.3, 1500, 0.5), 0.8, rand(0.9, 1.1)); },
+  home(){ play('home', () => [659, 784, 988].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.35, i * 0.1))); },
+  jump(){ play('jump', () => tone(300, 900, 0.25, 'sine', 0.4)); },
+  click(){ tone(600, 900, 0.1, 'sine', 0.3); },
 };
 
-let voice = null;
-function pickVoice(){
-  if(!('speechSynthesis' in window)) return;
-  const vs = speechSynthesis.getVoices();
-  voice = vs.find(v => /^en[-_]GB/i.test(v.lang) && /female|serena|kate|libby|sonia|martha|hazel/i.test(v.name))
-       || vs.find(v => /^en[-_]GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
-}
-if('speechSynthesis' in window) speechSynthesis.onvoiceschanged = pickVoice;
-function say(text, queue = false){
-  if(muted || !('speechSynthesis' in window)) return;
-  try{
-    if(!queue) speechSynthesis.cancel();
-    if(!voice) pickVoice();
-    const u = new SpeechSynthesisUtterance(text);
-    if(voice) u.voice = voice;
-    u.lang = voice ? voice.lang : 'en-GB'; u.rate = 0.9; u.pitch = 1.2;
-    speechSynthesis.speak(u);
-  }catch(e){}
+let talking = null, talkUntil = 0;
+// say a line; `queue` waits for the line being said to finish first
+function say(key, queue = false){
+  if(!ac || muted) return;
+  const k = 'say-' + key;
+  if(CLIPS[k] === undefined && READY[k]){   // still on its way: say it when it arrives, if that's soon
+    const asked = performance.now();
+    READY[k].then(() => { if(performance.now() - asked < 4000) say(key, queue); });
+    return;
+  }
+  const now = ac.currentTime;
+  if(queue && now < talkUntil){ setTimeout(() => say(key), (talkUntil - now) * 1000 + 120); return; }
+  try{ talking && talking.stop(); }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){}
+  const buf = CLIPS[k];
+  if(buf){
+    const s = ac.createBufferSource(), g = ac.createGain();
+    s.buffer = buf; g.gain.value = GAINS[k] || 1; s.connect(g).connect(voiceIn); s.start();
+    talking = s; talkUntil = now + buf.duration;
+  } else {
+    try{
+      const u = new SpeechSynthesisUtterance(LINES[key]); u.lang = 'en-GB'; u.rate = 0.9; u.pitch = 1.2;
+      speechSynthesis.speak(u);
+    }catch(e){}
+    talkUntil = now + 0.3 + LINES[key].length * 0.065;
+  }
+  Music.duck(talkUntil - now);
 }
 
+/* ======== music: one Eleven Music track, looped without a seam ======== */
+function loopable(b){
+  const X = Math.floor(MUSIC_XFADE * b.sampleRate), n = b.length - X;
+  const o = ac.createBuffer(b.numberOfChannels, n, b.sampleRate);
+  for(let c = 0; c < b.numberOfChannels; c++){
+    const d = b.getChannelData(c), od = o.getChannelData(c);
+    od.set(d.subarray(0, n));
+    for(let i = 0; i < X; i++){ const u = i / X; od[i] = d[i] * Math.sin(u * Math.PI / 2) + d[n + i] * Math.cos(u * Math.PI / 2); }   // equal-power blend of the end into the start
+  }
+  return o;
+}
+const Music = {
+  src: null,
+  start(){
+    if(!READY.music) return;
+    READY.music.then(() => {
+      if(this.src || !CLIPS.music) return;
+      const s = ac.createBufferSource(); s.buffer = loopable(CLIPS.music); s.loop = true;
+      s.connect(musicBus); s.start(); this.src = s;
+    });
+  },
+  duck(secs){   // dip under a spoken line, then come back up
+    if(!musicBus) return;
+    const g = musicBus.gain, t = ac.currentTime;
+    g.cancelScheduledValues(t); g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(MUSIC_VOL * MUSIC_DUCK, t + 0.1);
+    g.setValueAtTime(MUSIC_VOL * MUSIC_DUCK, t + secs); g.linearRampToValueAtTime(MUSIC_VOL, t + secs + 0.6);
+  },
+};
+
 /* ======== canvas and view ======== */
-// The world is drawn one game unit = one pixel into a small canvas (`buf`, drawn with `ctx`), then
-// blown up onto the screen canvas (`sctx`) by a whole number of device pixels, so every pixel is square.
+// The world is drawn into a small canvas (`buf`, drawn with `ctx`) with RES pixels per game unit, then blown
+// up onto the screen canvas (`sctx`) by a whole number of device pixels, so every pixel is square.
 // The recipe bar and fades are drawn sharp on the screen canvas on top.
 const cv = $('cv'), sctx = cv.getContext('2d');
 const buf = document.createElement('canvas'), ctx = buf.getContext('2d');
@@ -255,10 +360,11 @@ function resize(){
   if(!isFinite(frac)) frac = 0.5;
   W = Math.max(1, innerWidth); H = Math.max(1, innerHeight); dpr = Math.min(window.devicePixelRatio || 1, 3);
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-  dev = Math.max(1, Math.floor(Math.min(cv.width, cv.height) / VIEW_MIN));   // device pixels per game pixel
-  scale = dev / dpr;                                                          // CSS pixels per game pixel
+  const px = Math.max(1, Math.floor(Math.min(cv.width, cv.height) / (VIEW_MIN * RES)));   // device pixels per picture pixel
+  dev = px * RES;                                                                       // device pixels per game unit
+  scale = dev / dpr;                                                                    // CSS pixels per game unit
   vw = Math.ceil(cv.width / dev); vh = Math.ceil(cv.height / dev);
-  buf.width = vw; buf.height = vh; ctx.imageSmoothingEnabled = false;
+  buf.width = vw * RES; buf.height = vh * RES; ctx.imageSmoothingEnabled = false;
   witch.y = CEIL + frac * band();
   safeTop = $('safe').offsetHeight || 0;
 }
@@ -280,25 +386,40 @@ function loadArt(names){
     im.src = `assets/${n}.png?v=${ASSET_V}`;
   }
 }
-loadArt(['witch', 'cottage', 'cauldron', 'cloud', 'sock', 'shoe', 'frog', 'gold-crown', 'pumpkin', 'snowman', 'unicorn',
+loadArt(['witch-fly', 'cottage', 'cauldron', 'sock', 'shoe', ...FRIENDS.filter(f => f.img).map(f => f.img),
   ...Object.values(ING).map(i => i.img),
   ...LEVELS.flatMap(l => Object.entries(l.art || {}).filter(([k]) => ['far', 'near', 'cap', 'body', 'top'].includes(k)).map(([, v]) => v))]
   .filter((n, i, a) => a.indexOf(n) === i));
-const R = Math.round;
-function sprite(n, x, y, c = ctx){ const im = ART[n]; c.drawImage(im, R(x - im.width / 2), R(y - im.height / 2)); }
+const R = v => Math.round(v * RES) / RES;   // snap to the picture pixel grid
+const uw = im => im.width / RES, uh = im => im.height / RES;
+// a picture with its top-left corner at (x, y), `k` times its size
+function pic(im, x, y, k = 1){ ctx.drawImage(im, R(x), R(y), uw(im) * k, uh(im) * k); }
+// frame `i` of a picture made of `count` frames side by side
+function frameOf(im, count, i, x, y){
+  const fw = im.width / count;
+  ctx.drawImage(im, (i % count) * fw, 0, fw, im.height, R(x), R(y), fw / RES, uh(im));
+}
 
 /* ======== game state ======== */
+const params = new URLSearchParams(location.search);
 let L = 0, lv = LEVELS[0], state = 'menu';
 let cam = 0, spd = 0, fade = 0, time = 0;
 const witch = {y: 90, vy: 0, ang: 0, oops: 0, safe: 0, t: 0, trail: 0};
 let pillars = [], items = [], parts = [], flyers = [];
 let got = {}, shown = {}, complete = false, lastPillarX = 0, nextX = 0, prevCy = 0.5, homeX = 0;
 let brew = null;
-let unlocked = new URLSearchParams(location.search).has('all') ? LEVELS.length : store.get('unlocked', 1);
+let unlocked = params.has('all') ? LEVELS.length : store.get('unlocked', 1);
+let friends = params.has('friends') ? +params.get('friends') : store.get('friends', 0);   // how many friends ride the broom
 
 const witchX = () => cam + vw * WITCH_X;
 const gapCentre = p => CEIL + p.gap / 2 + p.gy * (band() - p.gap);
 const total = () => Object.values(lv.recipe).reduce((a, b) => a + b, 0);
+
+// Is friend `i` on the broom? At the cauldron, this level's friend only appears once it has jumped out.
+function friendShown(i){
+  if(brew && i === L && (state === 'brew' || state === 'card')) return brew.friendIn;
+  return i < friends;
+}
 
 function startLevel(i){
   L = i; lv = LEVELS[i];
@@ -314,10 +435,8 @@ function startLevel(i){
   spawnAhead();
   state = 'ready'; fade = 1;
   $('menu').classList.add('hidden'); $('card').classList.add('hidden');
-  const parts_ = Object.entries(lv.recipe).map(([k, n]) => `${WORDS[n]} ${n > 1 ? ING[k].many : ING[k].one}`);
-  const list = parts_.length > 1 ? parts_.slice(0, -1).join(', ') + ' and ' + parts_[parts_.length - 1] : parts_[0];
-  say(`Find ${list}!`);
-  say('Tap to fly!', true);
+  say('find-' + (i + 1));
+  say('tap', true);
 }
 
 /* ======== flying: obstacles and ingredients ======== */
@@ -360,8 +479,8 @@ function hits(p, x, y){
 
 function flap(){
   witch.vy = -FLAP; sfx.flap();
-  const x = witchX() - 16, y = witch.y + 5;
-  for(let i = 0; i < 4; i++) parts.push({x, y, vx: rand(-30, -10), vy: rand(10, 30), life: 0.4, max: 0.4, c: 'rgba(255,255,255,.8)', s: rand(1.5, 2.5)});
+  const x = witchX() - 18, y = witch.y + 6;
+  for(let i = 0; i < 4; i++) parts.push({x, y, vx: rand(-30, -10), vy: rand(10, 30), life: 0.4, max: 0.4, c: 'rgba(255,255,255,.8)', s: rand(1, 2)});
 }
 
 function oops(p){
@@ -369,8 +488,8 @@ function oops(p){
   spd = -30;
   witch.vy = gapCentre(p) > witch.y ? 40 : -70;
   sfx.bump();
-  if(Math.random() < 0.6) say(pick(['Oops!', 'Whoops!', 'Bump!']));
-  for(let i = 0; i < 8; i++) parts.push({x: witchX(), y: witch.y - 8, vx: rand(-40, 40), vy: rand(-50, 0), g: 120, life: 0.7, max: 0.7, c: '#ffe066', s: rand(1.5, 2.5)});
+  if(Math.random() < 0.6) say(pick(['oops', 'whoops', 'bump']));
+  for(let i = 0; i < 8; i++) parts.push({x: witchX(), y: witch.y - 8, vx: rand(-40, 40), vy: rand(-50, 0), g: 120, life: 0.7, max: 0.7, c: '#ffe066', s: rand(1, 2)});
 }
 
 function take(it){
@@ -383,22 +502,37 @@ function take(it){
   const k = it.kind, need = lv.recipe[k];
   if(got[k] >= need){
     sfx.extra();
-    for(let i = 0; i < 10; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: ING[k].col, s: 2});
+    for(let i = 0; i < 10; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: ING[k].col, s: 1.5});
     return;
   }
   got[k]++;
   const slot = hudSlots().find(s => s.kind === k && s.i === got[k] - 1);
-  flyers.push({e: ING[k].e, kind: k, x0: (it.x - cam) * scale, y0: (CEIL + it.fy * band()) * scale, x1: slot.x, y1: slot.y, s1: slot.s, t: 0});
+  flyers.push({kind: k, x0: (it.x - cam) * scale, y0: (CEIL + it.fy * band()) * scale, x1: slot.x, y1: slot.y, s1: slot.s, t: 0});
   sfx.pick();
-  say(Cap(WORDS[got[k]]) + '!');
-  for(let i = 0; i < 8; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: '#fff6a8', s: 2});
+  say('n' + got[k]);
+  for(let i = 0; i < 8; i++) parts.push({x: it.x, y: CEIL + it.fy * band(), vx: rand(-40, 40), vy: rand(-40, 40), life: 0.5, max: 0.5, c: '#fff6a8', s: 1.5});
   if(Object.keys(lv.recipe).every(k2 => got[k2] >= lv.recipe[k2])){
     complete = true; state = 'home';
     lastPillarX = pillars.length ? pillars[pillars.length - 1].x : wx;
     homeX = Math.max(lastPillarX + 140, cam + vw + 40);
-    say("That's everything! Fly home!", true);
+    say('home', true);
   }
 }
+
+// sparkles and the friends' trails from the end of the broom, at (x, y) in the world
+function broomTrail(dt, x, y, drift){
+  if((witch.trail -= dt) > 0) return;
+  witch.trail = 0.04;
+  if(friendShown(5)){   // a rainbow ribbon
+    ['#ff5a5a', '#ffa64d', '#ffe04d', '#5fd36b', '#4fa8ff', '#9a6bff'].forEach((c, i) =>
+      parts.push({x, y: y - 3 + i * 1.2, vx: drift, vy: 0, life: 0.7, max: 0.7, c, s: 1.5}));
+  }
+  if(friendShown(4)){   // twinkling stars
+    parts.push({x, y: y + rand(-4, 4), vx: drift + rand(-15, 0), vy: rand(-8, 8), life: 0.9, max: 0.9, c: pick(['#fff3a0', '#ffffff', '#ffd447']), s: rand(1.5, 2.5), star: true});
+  }
+  parts.push({x, y: y + rand(-2, 2), vx: drift + rand(-15, 0), vy: rand(-5, 5), life: 0.6, max: 0.6, c: pick(['#ffe066', '#ffb3f0', '#b9f2ff']), s: rand(0.5, 1.5)});
+}
+const trailAt = (x, y) => [x + (RIDER.trail[0] - RIDER.body[0]) / RES, y + (RIDER.trail[1] - RIDER.body[1]) / RES];
 
 function updateFly(dt){
   witch.t += dt;
@@ -411,28 +545,23 @@ function updateFly(dt){
     witch.y = CEIL + band() / 2 + Math.sin(witch.t * 3) * 4; witch.vy = 0;
   } else if(state === 'home' && wx > lastPillarX + PILLAR_W + 20){
     // past the last obstacle: glide down to the cottage on her own
-    const ty = g - 24;
+    const ty = g - 30;
     witch.vy = (ty - witch.y) * 1.6; witch.y += witch.vy * dt;
-    if(wx >= homeX - 36) startBrew();
+    if(wx >= homeX - 40) startBrew();
   } else {
     witch.vy = Math.min(MAX_FALL, witch.vy + GRAVITY * dt);
     const p = pillars.find(p => p.x + PILLAR_W > wx - 4 && p.x < wx + ASSIST_RANGE);
     if(p && ASSIST > 0 && witch.oops <= 0) witch.vy += (gapCentre(p) - witch.y) * ASSIST * dt;
     witch.y += witch.vy * dt;
-    if(witch.y > g - 7){ witch.y = g - 7; witch.vy = -FLAP * 0.75; sfx.boing(); }
+    if(witch.y > g - 12){ witch.y = g - 12; witch.vy = -FLAP * 0.75; sfx.boing(); }
     if(witch.y < CEIL + 4){ witch.y = CEIL + 4; if(witch.vy < 0) witch.vy = 0; }
     if(witch.safe <= 0) for(const p2 of pillars) if(hits(p2, wx, witch.y - 2)){ oops(p2); break; }
   }
   witch.oops = Math.max(0, witch.oops - dt);
   witch.safe = Math.max(0, witch.safe - dt);
-  const target = clamp(witch.vy / 260, -0.35, 0.45);
+  const target = clamp(witch.vy / 260, -0.3, 0.4);
   witch.ang = lerp(witch.ang, target, Math.min(1, dt * 8));
-
-  // sparkly trail from the broom
-  if(state !== 'ready' && (witch.trail -= dt) < 0){
-    witch.trail = 0.05;
-    parts.push({x: wx - 20, y: witch.y + 5 + rand(-2, 2), vx: rand(-20, -5), vy: rand(-5, 5), life: 0.6, max: 0.6, c: pick(['#ffe066', '#ffb3f0', '#b9f2ff']), s: rand(1, 2)});
-  }
+  if(state !== 'ready'){ const [tx, ty] = trailAt(wx, witch.y); broomTrail(dt, tx, ty, -10); }
 
   for(const it of items){
     it.t += dt;
@@ -451,39 +580,50 @@ function startBrew(){
   state = 'brew'; fade = 1; parts = []; flyers = [];
   for(const k in lv.recipe) shown[k] = got[k];
   const basket = [];
-  for(const k in lv.recipe) for(let i = 0; i < lv.recipe[k]; i++) basket.push({kind: k, e: ING[k].e, state: 0, t: 0});
-  brew = {phase: 'drop', basket, landed: 0, stir: 0, stirSound: 0, t: 0, magicT: 0, liquid: [111, 211, 111], target: [111, 211, 111], fw: 0, snow: 0};
+  for(const k in lv.recipe) for(let i = 0; i < lv.recipe[k]; i++) basket.push({kind: k, state: 0, t: 0});
+  brew = {phase: 'drop', basket, landed: 0, stir: 0, stirSound: 0, t: 0, magicT: 0, liquid: [111, 211, 111], target: [111, 211, 111],
+    fw: 0, snow: 0, friendT: -1, friendIn: false};
   sfx.home();
-  say('Tap to put them in the pot!');
+  say('pot');
 }
 const cauldron = () => ({x: R(vw * 0.5), y: ground() - 24});
+const brewWitch = () => ({x: cauldron().x - Math.min(64, vw * 0.33), y: ground() - 36});
 function basketPos(i){
   const n = brew.basket.length, sp = Math.min(28, (vw - 30) / n);
   return {x: vw / 2 + (i - (n - 1) / 2) * sp, y: Math.max(CEIL + 40, ground() - 110)};   // close above the pot on tall screens
+}
+// the unicorn flies behind the witch, or above and behind her when that would be off the left edge
+const unicornSpot = (x, y) => x - 48 >= 14 ? {x: x - 48, y: y - 6} : {x: Math.max(14, x - 30), y: y - 34};
+// where friend i sits when the witch's body is at (x, y) and she isn't tilted
+function friendSpot(i, x, y){
+  const f = FRIENDS[i];
+  if(f.name === 'unicorn') return unicornSpot(x, y);
+  if(!f.img) return {x, y};
+  return {x: x + (f.x - RIDER.body[0]) / RES, y: y + (f.y - RIDER.body[1]) / RES};
 }
 
 function brewTap(){
   if(brew.phase === 'drop'){
     const it = brew.basket.find(b => b.state === 0);
-    if(it){ it.state = 1; it.t = 0; tone(600, 900, 0.1, 'sine', 0.3); }
+    if(it){ it.state = 1; it.t = 0; sfx.click(); }
   } else if(brew.phase === 'stir') brew.stir += STIR_TAP;
 }
 
 function updateBrew(dt){
   brew.t += dt;
   const c = cauldron(), mouth = c.y - 14;
-  brew.basket.forEach((b, i) => {
+  brew.basket.forEach(b => {
     if(b.state !== 1) return;
     b.t += dt / 0.55;
     if(b.t >= 1){
       b.state = 2; brew.landed++;
       brew.target = hexRgb(ING[b.kind].col);
       sfx.splash();
-      say(Cap(WORDS[brew.landed]) + '!');
-      for(let j = 0; j < 12; j++) parts.push({x: c.x + rand(-8, 8), y: mouth, vx: rand(-40, 40), vy: rand(-90, -40), g: 220, life: 0.7, max: 0.7, c: rgbStr(brew.target), s: rand(1.5, 2.5)});
+      say('n' + brew.landed);
+      for(let j = 0; j < 12; j++) parts.push({x: c.x + rand(-8, 8), y: mouth, vx: rand(-40, 40), vy: rand(-90, -40), g: 220, life: 0.7, max: 0.7, c: rgbStr(brew.target), s: rand(1, 2)});
       if(brew.landed === brew.basket.length){
         brew.phase = 'stir';
-        say('Now stir! Round and round!', true);
+        say('stir', true);
       }
     }
   });
@@ -493,30 +633,41 @@ function updateBrew(dt){
   const rate = brew.phase === 'stir' ? 0.04 + 0.12 * (1 - brew.stir / STIR_NEEDED) : brew.phase === 'magic' ? 0.03 : 0.2;
   if(Math.random() < dt / rate){
     const l = brew.liquid.map(v => Math.min(255, v + 50));
-    parts.push({x: c.x + rand(-16, 16), y: mouth, vx: rand(-4, 4), vy: rand(-30, -14), life: 1, max: 1, c: rgbStr(l), s: rand(1.5, 3), ring: true});
+    parts.push({x: c.x + rand(-16, 16), y: mouth, vx: rand(-4, 4), vy: rand(-30, -14), life: 1, max: 1, c: rgbStr(l), s: rand(1, 2.5), ring: true});
   }
   if(brew.phase === 'stir'){
-    if(brew.stir - brew.stirSound > 120){ brew.stirSound = brew.stir; sfx.bubble(); }
+    if(brew.stir - brew.stirSound > 140){ brew.stirSound = brew.stir; sfx.bubble(); }
     if(brew.stir >= STIR_NEEDED){
       brew.phase = 'magic'; brew.magicT = 0;
-      sfx.poof(); say('Abracadabra! ' + lv.line);
+      sfx.poof(); say('magic-' + (L + 1));
       for(let j = 0; j < 40; j++){ const a = rand(0, Math.PI * 2), v = rand(30, 110);
-        parts.push({x: c.x, y: mouth - 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, g: 40, life: 1.2, max: 1.2, c: `hsl(${rand(0, 360)},90%,70%)`, s: rand(1.5, 3)}); }
+        parts.push({x: c.x, y: mouth - 6, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, g: 40, life: 1.2, max: 1.2, c: `hsl(${rand(0, 360)},90%,70%)`, s: rand(1, 2.5)}); }
     }
   }
   if(brew.phase === 'magic'){
     brew.magicT += dt;
     const h = (brew.magicT * 120) % 360;
     brew.target = hexRgb(hslHex(h));
+    // the new friend jumps out of the pot (or, for the stars, they fly out to the broom)
+    if(brew.magicT > 0.7 && brew.friendT < 0){ brew.friendT = 0; sfx.jump(); }
+    if(brew.friendT >= 0 && !brew.friendIn){
+      brew.friendT += dt / (L === 5 ? 1.6 : 1);
+      if(L === 4 && Math.random() < dt * 30){
+        const w = brewWitch(), [tx, ty] = trailAt(w.x, w.y), u = rand(0, 1);
+        parts.push({x: lerp(c.x, tx, u), y: lerp(mouth, ty, u) - Math.sin(u * Math.PI) * 30, vx: rand(-10, 10), vy: rand(-10, 10), life: 0.8, max: 0.8, c: pick(['#fff3a0', '#ffd447']), s: 2, star: true});
+      }
+      if(brew.friendT >= 1){ brew.friendIn = true; sfx.pick(); }
+    }
+    if(brew.friendIn){ const w = brewWitch(), [tx, ty] = trailAt(w.x, w.y); broomTrail(dt, tx, ty, -30); }
     if(lv.magic === 'fireworks' && (brew.fw -= dt) < 0){
       brew.fw = 0.45; sfx.pop();
       const x = rand(20, vw - 20), y = rand(CEIL + 20, ground() * 0.5), hue = rand(0, 360);
       for(let j = 0; j < 26; j++){ const a = j / 26 * Math.PI * 2, v = rand(35, 55);
-        parts.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 30, life: 1.1, max: 1.1, c: `hsl(${hue + rand(-20, 20)},95%,65%)`, s: 2}); }
+        parts.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 30, life: 1.1, max: 1.1, c: `hsl(${hue + rand(-20, 20)},95%,65%)`, s: 1.5}); }
     }
-    if(lv.magic === 'snowman' && (brew.snow -= dt) < 0){
+    if(lv.magic === 'snow' && (brew.snow -= dt) < 0){
       brew.snow = 0.05;
-      parts.push({x: rand(0, vw), y: -4, vx: rand(-6, 6), vy: rand(14, 24), life: 6, max: 6, c: '#ffffff', s: rand(1, 2)});
+      parts.push({x: rand(0, vw), y: -4, vx: rand(-6, 6), vy: rand(14, 24), life: 6, max: 6, c: '#ffffff', s: rand(0.5, 1.5)});
     }
     if(brew.magicT > MAGIC_TIME && state === 'brew') showCard();
   }
@@ -530,10 +681,12 @@ function hslHex(h){
 function showCard(){
   state = 'card';
   unlocked = Math.max(unlocked, Math.min(LEVELS.length, L + 2));
-  store.set('unlocked', unlocked);
-  $('cardEmoji').textContent = '🧪' + lv.prize;
+  friends = Math.max(friends, L + 1);
+  store.set('unlocked', unlocked); store.set('friends', friends);
+  $('cardEmoji').textContent = '🧪' + FRIENDS[L].emoji;
   $('bNext').classList.toggle('hidden', L >= LEVELS.length - 1);
   $('card').classList.remove('hidden');
+  if(L < LEVELS.length - 1) say('hooray', true);
 }
 
 function showMenu(){
@@ -558,27 +711,25 @@ function emoji(e, x, y, size, alpha = 1, c = ctx){
   c.fillText(e, x, y);
   c.globalAlpha = 1;
 }
-// an ingredient: its PixelLab picture when it has one (full size in the world, `size` wide on the screen canvas), else its emoji
+// an ingredient: its picture when it has loaded (full size in the world, `size` wide on the screen canvas), else its emoji
 function ingredient(kind, x, y, size, alpha = 1, c = ctx){
   const im = ART[ING[kind].img];
   if(!im) return emoji(ING[kind].e, x, y, size, alpha, c);
   c.globalAlpha = alpha;
-  if(c === ctx) c.drawImage(im, R(x - im.width / 2), R(y - im.height / 2));
-  else { c.imageSmoothingEnabled = false; c.drawImage(im, x - size / 2, y - size / 2, size, size); }
+  if(c === ctx) pic(im, x - uw(im) / 2, y - uh(im) / 2);
+  else { c.imageSmoothingEnabled = false; const k = size / Math.max(im.width, im.height); c.drawImage(im, x - im.width * k / 2, y - im.height * k / 2, im.width * k, im.height * k); }
   c.globalAlpha = 1;
 }
 function decoy(d, x, y, alpha = 1){
   const im = ART[d.img];
   if(!im) return emoji(d.e, x, y, 13, alpha);
-  ctx.globalAlpha = alpha; ctx.drawImage(im, R(x - im.width / 2), R(y - im.height / 2)); ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha; pic(im, x - uw(im) / 2, y - uh(im) / 2); ctx.globalAlpha = 1;
 }
-// a picture standing on (x, bottom), `k` times its size, or its emoji when it hasn't loaded
+// a picture standing on (x, bottom), `k` times its size, or `e` when it hasn't loaded
 function figure(n, e, x, bottom, k = 1, alpha = 1){
   const im = ART[n];
   if(!im) return emoji(e, x, bottom - 9 * k, 18 * k, alpha);
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(im, R(x - im.width * k / 2), R(bottom - im.height * k), R(im.width * k), R(im.height * k));
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha; pic(im, x - uw(im) * k / 2, bottom - uh(im) * k, k); ctx.globalAlpha = 1;
 }
 function hill(x, a, f){ return Math.sin(x * 0.013 * f) * a + Math.sin(x * 0.031 * f + 1) * a * 0.5; }
 
@@ -587,52 +738,44 @@ function drawBackdrop(camX){
   const sky = ctx.createLinearGradient(0, 0, 0, vh);
   sky.addColorStop(0, lv.sky[0]); sky.addColorStop(1, lv.sky[1]);
   ctx.fillStyle = sky; ctx.fillRect(0, 0, vw, vh);
+  const art = lv.art || {};
   if(lv.night){
     for(let i = 0; i < 70; i++){
       const sx = ((i * 97.3 - camX * 0.05) % (vw + 20) + vw + 20) % (vw + 20) - 10, sy = (i * 53.7) % (g * 0.8);
       ctx.globalAlpha = 0.5 + 0.5 * Math.sin(time * 2 + i);
-      ctx.fillStyle = '#fff'; ctx.fillRect(sx, sy, 1.2, 1.2);
+      ctx.fillStyle = '#fff'; ctx.fillRect(R(sx), R(sy), 1, 1);
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#fff5c8'; ctx.beginPath(); ctx.arc(vw * 0.8, 62, 12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff5c8'; ctx.beginPath(); ctx.arc(R(vw * 0.8), 30, 11, 0, 7); ctx.fill();
   } else if(ART.cloud){
     // small, slow, half-see-through clouds far away (the big ones in front are obstacles)
     ctx.globalAlpha = 0.7;
     for(let i = 0; i < 4; i++){
-      const span = vw + 140, cx = ((i * 170 - camX * 0.12) % span + span) % span - 70, cy = 34 + (i * 41) % 60;
-      ctx.drawImage(ART.cloud, R(cx), R(cy), 30, 18);
+      const span = vw + 140, cx = ((i * 170 - camX * 0.12) % span + span) % span - 70, cy = 30 + (i * 41) % 60;
+      pic(ART.cloud, cx, cy, 0.5);
     }
     ctx.globalAlpha = 1;
-  } else {
-    ctx.fillStyle = 'rgba(255,255,255,.85)';
-    for(let i = 0; i < 5; i++){
-      const span = vw + 80, cx = ((i * 140 - camX * 0.15) % span + span) % span - 40, cy = 24 + (i * 37) % 50;
-      ctx.beginPath(); ctx.ellipse(cx, cy, 18, 6, 0, 0, 7); ctx.ellipse(cx + 10, cy - 4, 10, 6, 0, 0, 7); ctx.fill();
-    }
   }
-  const art = lv.art || {};
-  if(ART[art.far + '-tile']) strip(ART[art.far + '-tile'], camX * 0.3, g - ART[art.far].height + 6);
+  if(ART[art.far + '-tile']) strip(ART[art.far + '-tile'], camX * 0.3, g - uh(ART[art.far]) + 6);
   else [[lv.hills[0], 0.25, 42, 16, 1], [lv.hills[1], 0.5, 20, 9, 1.6]].forEach(([col, par, up, amp, f]) => {
     ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, vh);
-    for(let x = 0; x <= vw + 4; x += 4) ctx.lineTo(x, g - up + hill(x + camX * par, amp, f));
+    for(let x = 0; x <= vw + 4; x += 2) ctx.lineTo(x, g - up + hill(x + camX * par, amp, f));
     ctx.lineTo(vw, vh); ctx.fill();
   });
   if(ART[art.near + '-tile']){
-    // the strips' grass line is 40 rows down (art-src/prep.py), and sits just below the ground line
+    // the strips' grass line is 40 units down (art-src/prep.py), and sits just below the ground line
     ctx.fillStyle = art.soil; ctx.fillRect(0, g + 3, vw, vh - g);
     strip(ART[art.near + '-tile'], camX, g + 3 - 40);
     return;
   }
   ctx.fillStyle = lv.ground; ctx.fillRect(0, g, vw, vh - g);
   ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(0, g, vw, 2);
-  ctx.fillStyle = 'rgba(0,0,0,.1)';
-  for(let i = 0; i < 30; i++){ const span = vw + 20, x = ((i * 37 - camX) % span + span) % span - 10; ctx.fillRect(x, g + 6 + (i * 7) % 10, 3, 1.5); }
 }
 
 // a repeating background strip, scrolled by `off`, with its top at `y`
 function strip(img, off, y){
-  const w = img.width;
-  for(let x = -(((R(off) % w) + w) % w); x < vw; x += w) ctx.drawImage(img, x, R(y));
+  const w = uw(img);
+  for(let x = -(((R(off) % w) + w) % w); x < vw; x += w) pic(img, x, y);
 }
 
 function drawPillar(p){
@@ -642,74 +785,75 @@ function drawPillar(p){
   if(cap && body && top){
     const odd = (p.x / PILLAR_EVERY) % 2 ? 2 : -2;
     // up from the ground: the body stacked from the cap down (a wobbly pile when it has a bodyStep)
-    const k = art.capScale || 1, cw = cap.width * k, ch = cap.height * k, step = art.bodyStep || body.height;
-    for(let y = b - 4 + ch - 8, i = 0; y < g + 4; y += step, i++){
+    const step = art.bodyStep || uh(body);
+    for(let y = b - 4 + uh(cap) - 8, i = 0; y < g + 4; y += step, i++){
       const dx = art.bodyStep ? (i % 2 ? 4 : -4) + odd : 0;
-      ctx.drawImage(body, R(cx - body.width / 2 + dx), R(y));
+      pic(body, cx - uw(body) / 2 + dx, y);
     }
-    ctx.drawImage(cap, R(cx - cw / 2), R(b - 4), cw, ch);
+    pic(cap, cx - uw(cap) / 2, b - 4);
     // down from the sky: a pile whose lowest piece hangs at the gap (drawn top first, so lower ones are in front)
     const ys = [];
-    for(let y = t - top.height + 6; y > -top.height; y -= art.topStep || 20) ys.push(y);
-    ys.reverse().forEach((y, i) => {
-      const dx = ((ys.length - i) % 2 ? 5 : -5) + odd;
-      ctx.drawImage(top, R(cx - top.width / 2 + dx), R(y));
-    });
+    for(let y = t - uh(top) + 6; y > -uh(top); y -= art.topStep || 20) ys.push(y);
+    ys.reverse().forEach((y, i) => pic(top, cx - uw(top) / 2 + ((ys.length - i) % 2 ? 5 : -5) + odd, y));
     return;
   }
   ctx.fillStyle = lv.top[0]; ctx.beginPath(); ctx.roundRect(x, -10, PILLAR_W, t + 10, [0, 0, 8, 8]); ctx.fill();
   ctx.fillStyle = lv.top[1]; ctx.beginPath(); ctx.ellipse(x + PILLAR_W / 2, t - 3, PILLAR_W / 2 + 5, 6, 0, 0, 7); ctx.fill();
   ctx.fillStyle = lv.bot[0]; ctx.fillRect(x + 4, b + 6, PILLAR_W - 8, g - b);
   ctx.fillStyle = lv.bot[1]; ctx.beginPath(); ctx.ellipse(x + PILLAR_W / 2, b + 8, PILLAR_W / 2 + 6, 11, 0, 0, 7); ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1; ctx.stroke();
 }
 
-function drawWitch(x, y, ang, alpha = 1){
-  if(ART.witch){
-    // the body (her dress) is at (28, 30) in the picture; tilt by whole steps so the pixels stay tidy
-    ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.round(ang / 0.08) * 0.08); ctx.globalAlpha = alpha;
-    ctx.drawImage(ART.witch, -28, -30);
-    ctx.restore();
+// one friend's picture with its feet (or, if it hangs, its top) at (x, y) in the current drawing frame
+function drawFriend(i, x, y){
+  const f = FRIENDS[i], im = ART[f.img];
+  if(!im) return emoji(f.emoji, x, y - 8, 14);
+  const w = uw(im) / (f.frames || 1), h = uh(im);
+  if(f.frames) return frameOf(im, f.frames, Math.floor(time * WITCH_FPS * 0.75 + 3), x - w / 2, y - h);
+  if(f.hang){   // the lantern swings from the broom handle
+    ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.round(Math.sin(time * 3) * 0.25 / 0.08) * 0.08);
+    pic(im, -w / 2, 0); ctx.restore();
     return;
   }
-  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = alpha;
-  const fl = Math.sin(time * 14) * 2;
-  // cape
-  ctx.fillStyle = '#4b2a86'; ctx.beginPath(); ctx.moveTo(-2, -6); ctx.lineTo(-13 - fl, -1); ctx.lineTo(-8, 4); ctx.fill();
-  // broom
+  pic(im, x - w / 2, y - h);
+}
+
+// The witch with everyone riding with her. (x, y) is her body; `ang` tilts the whole broom.
+function drawRider(x, y, ang, alpha = 1){
+  const im = ART['witch-fly'];
+  ctx.globalAlpha = alpha;
+  if(friendShown(5)){ const u = unicornSpot(x, y); drawFriend(5, u.x + Math.sin(time * 1.3) * 3, u.y + Math.sin(time * 2.6) * 3); }   // the unicorn flies alongside
+  if(!im){ drawStickWitch(x, y, ang); ctx.globalAlpha = 1; return; }
+  const fr = Math.floor(time * WITCH_FPS) % RIDER.frames, bob = (RIDER.broom[fr] - RIDER.broom[0]) / RES;
+  const ox = -RIDER.body[0] / RES, oy = -RIDER.body[1] / RES;
+  ctx.save(); ctx.translate(R(x), R(y)); ctx.rotate(Math.round(ang / 0.06) * 0.06);   // tilt in whole steps so the pixels stay tidy
+  const spot = i => [ox + FRIENDS[i].x / RES, oy + FRIENDS[i].y / RES + bob];
+  FRIENDS.forEach((f, i) => { if(f.behind && f.img && friendShown(i)) drawFriend(i, ...spot(i)); });
+  frameOf(im, RIDER.frames, fr, ox, oy);
+  FRIENDS.forEach((f, i) => { if(!f.behind && f.img && f.name !== 'unicorn' && friendShown(i)) drawFriend(i, ...spot(i)); });
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// a simple witch drawn in code, until her picture loads
+function drawStickWitch(x, y, ang){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
   ctx.strokeStyle = '#8a5a2b'; ctx.lineWidth = 2; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(-13, 5); ctx.lineTo(15, 3); ctx.stroke();
-  ctx.fillStyle = '#e8b04a'; ctx.beginPath(); ctx.moveTo(-12, 2.5); ctx.lineTo(-23, -1 + fl * 0.3); ctx.lineTo(-24, 10); ctx.lineTo(-12, 7.5); ctx.fill();
-  ctx.fillStyle = '#c4862e'; ctx.fillRect(-14, 2.5, 3, 5);
-  // robe and boot
-  ctx.fillStyle = '#7b4bc4'; ctx.beginPath(); ctx.moveTo(-6, 5); ctx.lineTo(5, 5); ctx.lineTo(2, -6); ctx.lineTo(-3, -6); ctx.fill();
-  ctx.fillStyle = '#2a2140'; ctx.beginPath(); ctx.ellipse(5, 7, 3, 1.6, 0, 0, 7); ctx.fill();
-  // hair, face, hat
-  ctx.fillStyle = '#ff8a3d'; ctx.beginPath(); ctx.arc(-2.5, -8, 4.2, 0, 7); ctx.fill();
+  ctx.fillStyle = '#e8b04a'; ctx.beginPath(); ctx.moveTo(-12, 2.5); ctx.lineTo(-23, -1); ctx.lineTo(-24, 10); ctx.lineTo(-12, 7.5); ctx.fill();
+  ctx.fillStyle = '#2f6b35'; ctx.beginPath(); ctx.moveTo(-6, 5); ctx.lineTo(5, 5); ctx.lineTo(2, -6); ctx.lineTo(-3, -6); ctx.fill();
   ctx.fillStyle = '#ffd9b3'; ctx.beginPath(); ctx.arc(0.5, -9, 3.8, 0, 7); ctx.fill();
-  ctx.fillStyle = '#2a2140'; ctx.fillRect(2, -10, 1.2, 1.4);
-  ctx.fillStyle = '#ff9aa8'; ctx.fillRect(2.4, -7.6, 1.6, 1);
   ctx.fillStyle = '#4b2a86'; ctx.beginPath(); ctx.ellipse(0, -12, 7.5, 1.8, 0, 0, 7); ctx.fill();
   ctx.beginPath(); ctx.moveTo(-4, -12); ctx.lineTo(4, -12); ctx.lineTo(-4, -22); ctx.fill();
-  ctx.fillStyle = '#ffd447'; ctx.fillRect(-3.5, -14, 7, 1.6);
   ctx.restore();
 }
 
 function drawCottage(x){
-  const g = ground();
-  if(ART.cottage){
-    ctx.drawImage(ART.cottage, R(x - 40), R(g + 6 - ART.cottage.height));
-    for(let i = 0; i < 3; i++){ const k = (time * 0.6 + i / 3) % 1;   // smoke from the chimney
-      ctx.fillStyle = `rgba(235,235,245,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(R(x + 16 + k * 10), R(g - 74 - k * 24), R(3 + k * 4), 0, 7); ctx.fill(); }
-    return;
-  }
-  ctx.fillStyle = '#8a5a3c'; ctx.fillRect(x - 22, g - 30, 44, 30);
-  ctx.fillStyle = '#5a3a6e'; ctx.beginPath(); ctx.moveTo(x - 28, g - 28); ctx.lineTo(x, g - 52); ctx.lineTo(x + 28, g - 28); ctx.fill();
-  ctx.fillStyle = '#5a4a4a'; ctx.fillRect(x + 10, g - 50, 6, 14);
-  ctx.fillStyle = '#ffe58a'; ctx.fillRect(x - 15, g - 22, 9, 8);
-  ctx.fillStyle = '#4a2f20'; ctx.fillRect(x + 4, g - 18, 9, 18);
+  const g = ground(), im = ART.cottage;
+  if(!im) return;
+  pic(im, x - uw(im) / 2, g + 6 - uh(im));
+  const cx = x - uw(im) / 2 + 29.5, cy = g + 6 - uh(im);   // the top of the chimney
   for(let i = 0; i < 3; i++){ const k = (time * 0.6 + i / 3) % 1;
-    ctx.fillStyle = `rgba(230,230,240,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(x + 13 + k * 8, g - 54 - k * 22, 3 + k * 4, 0, 7); ctx.fill(); }
+    ctx.fillStyle = `rgba(235,235,245,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(R(cx + k * 10), R(cy - 3 - k * 24), 3 + k * 4, 0, 7); ctx.fill(); }
 }
 
 function drawFly(){
@@ -725,23 +869,23 @@ function drawFly(){
     }
     if(it.taken) continue;
     if(it.decoy){ decoy(it.decoy, x, y); continue; }
-    const big = !!ART[ING[it.kind].img];
-    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(R(x), R(y), (big ? 13 : 9) + Math.sin(it.t * 5), 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(R(x), R(y), 14 + Math.sin(it.t * 5), 0, 7); ctx.fill();
     ingredient(it.kind, x, y, 13);
   }
   drawParts(cam);
   const wx = witchX() - cam;
   const flicker = witch.safe > 0 && witch.oops <= 0 ? (Math.sin(time * 30) > 0 ? 1 : 0.4) : 1;
-  drawWitch(wx, witch.y, witch.ang + (witch.oops > 0 ? (1 - witch.oops / OOPS_TIME) * Math.PI * 2 : 0), flicker);
-  if(witch.oops > 0) emoji('💫', wx + 4, witch.y - (ART.witch ? 36 : 24), 10);
+  drawRider(wx, witch.y, witch.ang + (witch.oops > 0 ? (1 - witch.oops / OOPS_TIME) * Math.PI * 2 : 0), flicker);
+  if(witch.oops > 0) emoji('💫', wx + 4, witch.y - 30, 10);
 }
 
 function drawParts(camX){
   for(const p of parts){
-    const a = clamp(p.life / p.max, 0, 1);
-    ctx.globalAlpha = a;
-    if(p.ring){ ctx.strokeStyle = p.c; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(p.x - camX, p.y, p.s, 0, 7); ctx.stroke(); }
-    else { ctx.fillStyle = p.c; ctx.fillRect(p.x - camX - p.s / 2, p.y - p.s / 2, p.s, p.s); }
+    ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
+    const x = R(p.x - camX), y = R(p.y);
+    if(p.ring){ ctx.strokeStyle = p.c; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.arc(x, y, p.s, 0, 7); ctx.stroke(); }
+    else if(p.star){ ctx.fillStyle = p.c; ctx.fillRect(x - p.s, y - 0.25, p.s * 2, 0.5); ctx.fillRect(x - 0.25, y - p.s, 0.5, p.s * 2); }
+    else { ctx.fillStyle = p.c; ctx.fillRect(x - p.s / 2, y - p.s / 2, p.s, p.s); }
   }
   ctx.globalAlpha = 1;
 }
@@ -749,42 +893,29 @@ function drawParts(camX){
 function drawBrew(){
   drawBackdrop(cam);
   const c = cauldron(), g = ground(), mouth = c.y - 14, m = brew.phase === 'magic' ? brew.magicT : -1;
-  drawCottage(c.x - 70 < 30 ? -100 : c.x - 95);
-  // the thing the potion will change
-  const sx = c.x + Math.min(58, vw * 0.32);
-  if(lv.magic === 'frog'){
-    const hop = m > 0.8 ? Math.abs(Math.sin((m - 0.8) * 6)) * 10 : 0;
-    figure('frog', '🐸', sx, g + 2 - hop);
-    if(m >= 0) figure('gold-crown', '👑', sx + 1, lerp(-10, g - 20, ease(m / 0.8)) - (m > 0.8 ? hop : 0), 0.75);
-  }
-  if(lv.magic === 'pumpkin') figure('pumpkin', '🎃', sx, g + 2, 1 + (m >= 0 ? easeBack(m / 1.2) : 0));
-  if(lv.magic === 'snowman'){
-    ctx.save(); ctx.translate(R(sx), R(g + 2 - (m >= 0 ? Math.abs(Math.sin(m * 7)) * 6 : 0))); ctx.rotate(m >= 0 ? Math.sin(m * 7) * 0.25 : 0);
-    figure('snowman', '⛄', 0, 0); ctx.restore();
-  }
+  const w = brewWitch(), wy = w.y + Math.sin(time * 3) * 2;
+  if(c.x - 100 > -20) drawCottage(c.x - 100);
   if(lv.magic === 'flowers' && m >= 0){
     for(let i = 0; i < 10; i++){ const k = easeBack((m - i * 0.12) / 0.6);
-      if(k > 0.05) figure('ing-flower', ['🌷', '🌻', '🌼'][i % 3], (i + 0.5) * vw / 10, g + 6, k); }
+      if(k > 0.05) figure('ing-flower', '🌷', (i + 0.5) * vw / 10, g + 6, k); }
   }
   if(lv.magic === 'rainbow' && m >= 0){
     const rad = Math.min(vw * 0.46, g - CEIL - 20), cols = ['#ff5a5a', '#ffa64d', '#ffe04d', '#5fd36b', '#4fa8ff', '#9a6bff'];
     ctx.lineWidth = rad * 0.07;
     cols.forEach((col, i) => { ctx.strokeStyle = col; ctx.beginPath();
       ctx.arc(vw / 2, g, rad - i * rad * 0.07, Math.PI, Math.PI + Math.PI * ease(m / 1.5)); ctx.stroke(); });
-    if(m > 1) figure('unicorn', '🦄', lerp(-30, vw + 30, (m - 1) / 3), g - rad + 12 + Math.sin(m * 5) * 4);
   }
   // fire, pot, liquid
   ctx.fillStyle = '#ff9a3c';
   for(let i = -2; i <= 2; i++){ const h = 6 + Math.sin(time * 12 + i * 2) * 2;
     ctx.beginPath(); ctx.moveTo(c.x + i * 7 - 4, g); ctx.lineTo(c.x + i * 7, g - h); ctx.lineTo(c.x + i * 7 + 4, g); ctx.fill(); }
   if(ART.cauldron){
-    // the pot's opening is centred at (25, 6) in the picture
-    ctx.drawImage(ART.cauldron, R(c.x - 25), R(mouth - 6));
-    ctx.fillStyle = rgbStr(brew.liquid); ctx.beginPath(); ctx.ellipse(R(c.x), R(mouth) + 0.5, 18, 3.5, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(R(c.x - 9), R(mouth - 2), 6, 1);
+    // the pot's opening is centred at (26, 7.5) units in the picture
+    pic(ART.cauldron, c.x - 26, mouth - 7.5);
+    ctx.fillStyle = rgbStr(brew.liquid); ctx.beginPath(); ctx.ellipse(c.x, R(mouth) + 1, 19, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(R(c.x - 10), R(mouth - 1.5), 6, 1);
   } else {
     ctx.fillStyle = '#2b2b3a'; ctx.beginPath(); ctx.ellipse(c.x, c.y, 26, 18, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#3d3d52'; ctx.beginPath(); ctx.ellipse(c.x, mouth, 24, 6, 0, 0, 7); ctx.fill();
     ctx.fillStyle = rgbStr(brew.liquid); ctx.beginPath(); ctx.ellipse(c.x, mouth, 20, 4.2, 0, 0, 7); ctx.fill();
   }
   // spoon
@@ -793,7 +924,20 @@ function drawBrew(){
     ctx.strokeStyle = '#a0703a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(c.x + Math.cos(a) * 10, mouth + Math.sin(a) * 2.5); ctx.lineTo(c.x + Math.cos(a) * 16, mouth - 26); ctx.stroke();
   }
-  drawWitch(c.x - Math.min(52, vw * 0.29), g - (ART.witch ? 34 : 24) + Math.sin(time * 3) * 2, 0);
+  drawParts(0);
+  drawRider(w.x, wy, 0);
+  // this level's friend on its way from the pot to the broom
+  if(brew.friendT >= 0 && !brew.friendIn && FRIENDS[L].img){
+    const t = ease(brew.friendT);
+    if(L === 5){   // the unicorn flies in from the left under the rainbow
+      const s = friendSpot(L, w.x, wy);
+      drawFriend(L, lerp(-30, s.x, t), lerp(CEIL + 30, s.y, t) - Math.sin(t * Math.PI) * 10);
+    } else {
+      const s = friendSpot(L, w.x, wy), f = FRIENDS[L];
+      ctx.save(); ctx.translate(lerp(c.x, s.x, t), lerp(mouth + 4, s.y, t) - Math.sin(t * Math.PI) * 45);
+      ctx.rotate(Math.round((1 - t) * 4) * Math.PI / 2 * (t < 1 ? 1 : 0)); drawFriend(L, 0, f.hang ? -10 : 0); ctx.restore();
+    }
+  }
   // the basket of ingredients waiting at the top
   brew.basket.forEach((b, i) => {
     const p = basketPos(i);
@@ -802,14 +946,13 @@ function drawBrew(){
       ingredient(b.kind, p.x, p.y + (next ? Math.sin(time * 6) * 2 : 0), 16);
     } else if(b.state === 1){
       const t = b.t, x = lerp(p.x, c.x, t), y = lerp(p.y, mouth, t) - Math.sin(t * Math.PI) * 30;
-      ingredient(b.kind, x, y, 16 * (1 - 0.4 * t));
+      ingredient(b.kind, x, y, 16);
     }
   });
-  drawParts(0);
   // hints
   if(brew.phase === 'drop' && brew.basket.some(b => b.state === 0) && brew.t > 1.2){
     const i = brew.basket.findIndex(b => b.state === 0), p = basketPos(i);
-    emoji('👆', p.x + 6, p.y + 20 + Math.sin(time * 6) * 3, 14);
+    emoji('👆', p.x + 6, p.y + 22 + Math.sin(time * 6) * 3, 14);
   }
   if(brew.phase === 'stir'){
     ctx.save(); ctx.translate(c.x, mouth - 34); ctx.rotate(time * 3);
@@ -829,7 +972,7 @@ function hudSlots(){
   const width = n * s * 1.15 + (kinds.length - 1) * s * 0.6;
   let x = W / 2 - width / 2 + s * 0.575;
   const y = safeTop + 32, slots = [];
-  kinds.forEach((k, ki) => {
+  kinds.forEach(k => {
     for(let i = 0; i < lv.recipe[k]; i++){ slots.push({kind: k, i, x, y, s}); x += s * 1.15; }
     x += s * 0.6;
   });
@@ -844,11 +987,11 @@ function drawHud(){
   for(const sl of slots){
     const filled = sl.i < shown[sl.kind];
     if(!filled){ sctx.fillStyle = 'rgba(42,33,64,.1)'; sctx.beginPath(); sctx.arc(sl.x, sl.y, s * 0.48, 0, 7); sctx.fill(); }
-    ingredient(sl.kind, sl.x, sl.y + 1, s * 0.8, filled ? 1 : 0.3, sctx);
+    ingredient(sl.kind, sl.x, sl.y + 1, s * 0.82, filled ? 1 : 0.3, sctx);
   }
   for(const f of flyers){
     const t = ease(f.t), x = lerp(f.x0, f.x1, t), y = lerp(f.y0, f.y1, t) - Math.sin(t * Math.PI) * 40;
-    ingredient(f.kind, x, y, lerp((ART[ING[f.kind].img] ? 24 : 13) * scale, f.s1 * 0.8, t), 1, sctx);
+    ingredient(f.kind, x, y, lerp(24 * scale, f.s1 * 0.82, t), 1, sctx);
   }
   if(state === 'ready'){
     const x = (witchX() - cam) * scale, y = (witch.y + 30) * scale;
@@ -860,8 +1003,10 @@ function drawHud(){
 let last = performance.now();
 function frame(now){
   const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
-  if(state === 'menu' || state === 'card'){
-    if(state === 'menu') cam += 18 * dt;
+  if(state === 'menu'){
+    cam += 18 * dt;
+    const [tx, ty] = trailAt(vw * 0.5 + Math.sin(time * 0.7) * vw * 0.3, vh * 0.72 + Math.sin(time * 1.6) * 10);
+    broomTrail(dt, tx + cam, ty, -20);
   }
   if(state === 'ready' || state === 'fly' || state === 'home') updateFly(dt);
   else if(state === 'brew' || (state === 'card' && brew)) updateBrew(dt);
@@ -871,11 +1016,12 @@ function frame(now){
   flyers = flyers.filter(f => f.t < 1);
   fade = Math.max(0, fade - dt * 2.5);
 
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(RES, 0, 0, RES, 0, 0);
   if(state === 'brew' || (state === 'card' && brew)) drawBrew();
   else if(state === 'menu'){
     drawBackdrop(cam);
-    drawWitch(vw * 0.5 + Math.sin(time * 0.7) * vw * 0.3, vh * 0.72 + Math.sin(time * 1.6) * 10, Math.cos(time * 1.6) * 0.15);
+    drawParts(cam);
+    drawRider(vw * 0.5 + Math.sin(time * 0.7) * vw * 0.3, vh * 0.72 + Math.sin(time * 1.6) * 10, Math.cos(time * 1.6) * 0.12);
   }
   else drawFly();
   sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.imageSmoothingEnabled = false;
@@ -911,7 +1057,8 @@ $('sound').addEventListener('pointerdown', e => e.stopPropagation());
 function paintSound(){ $('sound').textContent = muted ? '🔇' : '🔊'; }
 $('sound').onclick = () => {
   muted = !muted; store.set('muted', muted); paintSound();
-  if(muted){ try{ speechSynthesis.cancel(); }catch(e){} } else { audio(); sfx.pick(); }
+  audio(); if(out) out.gain.value = muted ? 0 : 1;
+  if(muted){ try{ speechSynthesis.cancel(); }catch(e){} } else sfx.pick();
 };
 $('bMap').onclick = showMenu;
 $('bAgain').onclick = () => { audio(); startLevel(L); };
