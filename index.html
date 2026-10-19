@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#7b4bc4">
 <title>Witchy Brew</title>
+<script>performance.setResourceTimingBufferSize?.(1000);</script>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Witchy Brew">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap" rel="stylesheet" crossorigin="anonymous">
@@ -51,6 +59,9 @@
   .btn{width:78px;height:78px;border-radius:50%;border:0;background:#fff;font-size:36px;line-height:1;cursor:pointer;
     box-shadow:0 5px 0 var(--purple);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   .btn.go{background:var(--gold)}
+  .credit{margin:0;font-size:12px;color:#fff;opacity:.9;text-align:center;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  #menu .credit{position:absolute;bottom:calc(8px + env(safe-area-inset-bottom,0px));left:0;right:0;padding:0 calc(16px + env(safe-area-inset-right,0px)) 0 calc(16px + env(safe-area-inset-left,0px))}
+  .panel .credit{color:var(--ink);opacity:.6;text-shadow:none;margin-top:4px}
   .btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--purple)}
   @media (orientation:landscape) and (max-height:500px){
     #menu{flex-direction:row;gap:36px;padding-top:calc(16px + env(safe-area-inset-top,0px))}
@@ -68,6 +79,7 @@
 <div id="menu" class="overlay">
   <div id="brand"><h1>Witchy Brew</h1><div class="hero">🧙‍♀️🧹</div></div>
   <div id="levels"></div>
+  <p class="credit">Pictures: PixelLab. Voices and sounds: elevenlabs.io. Music: Eleven Music</p>
 </div>
 
 <div id="card" class="overlay hidden">
@@ -79,6 +91,7 @@
       <button class="btn" id="bAgain" aria-label="Play again">🔄</button>
       <button class="btn go" id="bNext" aria-label="Next level">▶️</button>
     </div>
+    <p class="credit">Pictures: PixelLab. Voices and sounds: elevenlabs.io. Music: Eleven Music</p>
   </div>
 </div>
 
@@ -1419,6 +1432,16 @@ $('bNext').onclick = () => { audio(); startLevel(Math.min(L + 1, LEVELS.length -
 addEventListener('resize', resize);
 resize(); paintSound(); showMenu();
 requestAnimationFrame(frame);
+</script>
+<script>
+// Offline support: sw.js caches this page. Once the page has loaded, send it every file the page used (pictures,
+// sounds, fonts) so those work offline too. Fails quietly where unsupported, e.g. on file://.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then((reg) => {
+    const send = () => reg.active && reg.active.postMessage({ cache: [location.href, ...performance.getEntriesByType('resource').map((r) => r.name)] });
+    send(); setTimeout(send, 5000); setTimeout(send, 20000);
+  }).catch(() => {});
+}
 </script>
 </body>
 </html>

@@ -16,6 +16,8 @@ swishes its tail). The world is drawn on a small pixel canvas, 2 pixels to every
 up by whole pixels, so the bits drawn in code (sparkles, the potion, fire, fireworks, the rainbow)
 match the pictures.
 
+Play it at https://tb-x.github.io/witch-brew/.
+
 ## How it plays
 
 - Pick a level (the next one opens when you finish one). A voice says what to find: "Find two
@@ -80,6 +82,12 @@ short side of the screen always shows about the same amount of the world, so on 
 the sky is taller and you see less ahead. Opened straight from disk the pictures still show, but the
 browser won't load the sounds, so the effects are made in the browser and the device's own voice talks.
 
+## Play offline (add to Home Screen)
+
+On iPhone or iPad, open the game in Safari, tap **Share → Add to Home Screen**, then open it once from the new icon while online. After that it starts full screen and works without internet. Changes arrive on their own: the next online launch downloads them and the one after shows them.
+
+(How: `manifest.webmanifest` gives the icon and full-screen mode; `sw.js`, a service worker, keeps a copy of every file the game uses. `icon.svg` shows the witch's first flying frame on a night sky; `icon-512.png` is rendered from it in headless Chrome and `icon-180.png` is scaled down from that.)
+
 ## Tuning knobs
 
 At the top of the script in `index.html`:
@@ -129,15 +137,14 @@ At the top of the script in `index.html`:
 
 1. **Play-test** with a five-year-old on a phone and tune `FLAP`, `GRAVITY`, `SPEED`, `gap` and
    `ASSIST` until it's easy and fun.
-2. **Finish**: offline support (manifest, `sw.js`, icons), list it on the landing page, publish to
-   `tb-x/witch-brew`.
-3. Maybe: one shared palette (like Nut Run's `art-src/palette.py`) so all the pictures match even
+2. Maybe: one shared palette (like Nut Run's `art-src/palette.py`) so all the pictures match even
    more closely.
 
 ## Credits
 
 Pictures: made with [PixelLab](https://pixellab.ai). Voices and sounds: [elevenlabs.io](https://elevenlabs.io).
 Music: Eleven Music. Sparkles, the potion, fire, fireworks and the rainbow are drawn in code.
+The same credit line shows on the level picker and on the end card.
 
 ### Picture credits
 
