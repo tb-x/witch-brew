@@ -253,6 +253,13 @@ save(trim(load('tower-roof').crop((0, 0, 96, 68))), 'tower-roof')     # the roof
 save(centre(load('tower'), 44), 'tower')                              # a little narrower than the roof
 save(trim(load('cloud-night')), 'cloud-night')
 save(trim(load('cloud-pink')), 'cloud-pink')
+# more obstacles, so a level isn't the same thing over and over: things that stand on the ground, picked by
+# how much room there is under the gap (ob-*), and more pieces for the piles hanging from the sky
+for n in ('bush-meadow', 'apple-tree', 'fern', 'toadstool', 'pumpkins', 'scarecrow', 'snowman2', 'snowy-fir',
+          'glow-mushrooms', 'night-shrub', 'spellbooks', 'cupcake', 'lollipop'):
+    save(trim(load(n)), f'ob-{n}')
+for n in ('cloud2', 'leaves-gold', 'cloud-rainbow', 'beehive', 'icicles', 'lanterns-hanging'):
+    save(trim(load(n)), n)
 
 # background strips: far hills and the ground along the bottom
 for lvl in ('meadow', 'forest', 'autumn', 'snow', 'night', 'rainbow'):

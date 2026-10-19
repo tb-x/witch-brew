@@ -85,7 +85,7 @@
 <script>
 'use strict';
 /* ======== tuning knobs ======== */
-const ASSET_V = 7;           // bump after changing any picture or sound in assets/
+const ASSET_V = 8;           // bump after changing any picture or sound in assets/
 const VIEW_MIN = 180;        // at least this many game units across the short side of the screen (smaller = bigger witch)
 const RES = 2;               // picture pixels per game unit (the PixelLab pictures are drawn at this size)
 const CEIL = 8;              // soft ceiling, units below the top edge
@@ -125,6 +125,7 @@ const DASH_TIME = 2.5;       // ...lasts this long...
 const DASH_SPEED = 1.6;      // ...and makes her this much faster, flying through everything
 const UNICORN_EVERY = 3;     // the unicorn picks a new place to fly to (round the witch) about this often
 // moving things and special pickups (each level in LEVELS says which it has)
+const STACK_SHARE = 0.35;    // share of obstacles that are the level's tall stack (tree, hay bales, rock, tower...); the rest are the shorter pictures
 const MOVE_AMP = 14;         // how far a moving gap bobs up and down
 const WIND_EVERY = 7, WIND_TIME = 2, WIND_PUSH = 110;   // snowy gusts: how often, how long, how hard (units/s²)
 const FLOCK_EVERY = 9;       // seconds between flocks of birds or bats (they scatter when she flies into them)
@@ -181,29 +182,37 @@ const ACT_RANK = {fly: 0, swoop: 1, cheer: 2, wave: 2, bonk: 3};   // a bump out
 
 // sky: top and bottom colour; hills: far and near; bot/top: obstacle body and cap colours (the simple look,
 // used until the pictures load). art: the level's PixelLab pictures: `far` and `near` background strips,
-// `soil` (the colour under the near strip), and the obstacles: a `cap` at the gap, a `body` stacked from it
-// to the ground (`bodyStep` makes it a wobbly pile instead of a column) onto a `foot` (a tree's roots), and a `top` piled up from the gap
-// into the sky, `topStep` apart. magic: what else happens when the potion is ready.
+// `soil` (the colour under the near strip), and the obstacles. `bottoms` are the kinds that stand on the ground,
+// and each obstacle gets one that fits the room under its gap: a single picture (`img`) of its own height, or a
+// stack that reaches any height, a `cap` at the gap with a `body` stacked down to the ground (`bodyStep` makes it
+// a wobbly pile instead of a column) onto a `foot` (a tree's roots). `tops` are piled up from the gap into the
+// sky, `topStep` apart, mixed; `hang` are things that sometimes dangle from the bottom of the pile. magic: what else happens when the potion is ready.
 // length: obstacles before her cottage (the ingredients are spread along the way); decoys: the things to avoid; moving: share of gaps that bob up and down; wind: snowy gusts;
 // flock: 'birds' or 'bats' fly across; dark: only the light round the witch shows; specials: comets and bubbles.
 const LEVELS = [
   {icon:'🌼', sky:['#bfe7ff','#f4fbe2'], hills:['#a6dc8f','#7cc66a'], ground:'#6bb35a',
-   art:{far:'bg-meadow-far', near:'bg-meadow-near', soil:'#764d52', cap:'oak-top', body:'oak-trunk', foot:'oak-foot', top:'cloud'},
+   art:{far:'bg-meadow-far', near:'bg-meadow-near', soil:'#764d52', tops:['cloud', 'cloud2'],
+     bottoms:[{cap:'oak-top', body:'oak-trunk', foot:'oak-foot'}, {img:'ob-apple-tree'}, {img:'ob-bush-meadow'}]},
    bot:['#8a5a3c','#5fae4e'], top:['#ffffff','#f2f7ff'], recipe:{flower:3}, speed:0.9, gap:96, length:14, magic:'flowers', flock:'birds'},
   {icon:'🌲', sky:['#a6e8c2','#c8f2c0'], hills:['#5c9e62','#3f7f48'], ground:'#3f7a3c',
-   art:{far:'bg-forest-far', near:'bg-forest-near', soil:'#051831', cap:'fir-top', body:'fir-trunk', foot:'fir-foot', top:'vines', topStep:30},
+   art:{far:'bg-forest-far', near:'bg-forest-near', soil:'#051831', tops:['vines'], topStep:30, hang:['beehive'],
+     bottoms:[{cap:'fir-top', body:'fir-trunk', foot:'fir-foot'}, {img:'ob-toadstool'}, {img:'ob-fern'}]},
    bot:['#6b4428','#2f7a3a'], top:['#2f7a3a','#3d9447'], recipe:{mushroom:2, berry:2}, speed:1, gap:92, length:16, moving:0.25, flock:'birds', specials:['bubble']},
   {icon:'🎃', sky:['#9e8b94','#9e8b94'], hills:['#c98a4a','#8a6a2f'], ground:'#6b7a32',
-   art:{far:'bg-autumn-far', near:'bg-autumn-near', soil:'#482a0a', cap:'hay-top', body:'hay-bale', bodyStep:22, top:'leaves-autumn', topStep:22},
+   art:{far:'bg-autumn-far', near:'bg-autumn-near', soil:'#482a0a', tops:['leaves-autumn', 'leaves-gold'], topStep:22,
+     bottoms:[{cap:'hay-top', body:'hay-bale', bodyStep:22}, {img:'ob-scarecrow'}, {img:'ob-pumpkins'}]},
    bot:['#7a5230','#e07a2a'], top:['#b46a3a','#7a4a2a'], recipe:{leaf:2, apple:2, feather:1}, speed:1.05, gap:90, length:18, decoys:['sock', 'shoe'], moving:0.3, specials:['comet', 'bubble']},
   {icon:'⛄', sky:['#c6e4f5','#e4f1f7'], hills:['#e3eefa','#cfdff0'], ground:'#f2f7ff',
-   art:{far:'bg-snow-far', near:'bg-snow-near', soil:'#9ab2be', cap:'rock-top', body:'rock', top:'cloud-snow', topStep:26},
+   art:{far:'bg-snow-far', near:'bg-snow-near', soil:'#9ab2be', tops:['cloud-snow'], topStep:26, hang:['icicles'],
+     bottoms:[{cap:'rock-top', body:'rock'}, {img:'ob-snowy-fir'}, {img:'ob-snowman2'}]},
    bot:['#8d97a8','#ffffff'], top:['#c7e3ff','#ffffff'], recipe:{snow:3, berry:2}, speed:1.1, gap:88, length:20, decoys:['sock', 'shoe', 'fish'], moving:0.3, wind:true, specials:['bubble'], magic:'snow'},
   {icon:'🌙', sky:['#060d24','#060d24'], hills:['#2b2f63','#1f2550'], ground:'#2a3358', night:true,
-   art:{far:'bg-night-far', near:'bg-night-near', soil:'#030d1e', cap:'tower-roof', body:'tower', top:'cloud-night', topStep:24},
+   art:{far:'bg-night-far', near:'bg-night-near', soil:'#030d1e', tops:['cloud-night'], topStep:24, hang:['lanterns-hanging'],
+     bottoms:[{cap:'tower-roof', body:'tower'}, {img:'ob-spellbooks'}, {img:'ob-glow-mushrooms'}, {img:'ob-night-shrub'}]},
    bot:['#3b3f6b','#59609a'], top:['#555c8f','#7a80b8'], recipe:{star:3, moon:1, drop:2}, speed:1.15, gap:88, length:22, decoys:['shoe', 'fish', 'snail'], moving:0.35, flock:'bats', dark:true, specials:['comet'], magic:'fireworks'},
   {icon:'🌈', sky:['#ecd8f5','#ecd8f5'], hills:['#ffe3f3','#e7f4ff'], ground:'#bdf0cc',
-   art:{far:'bg-rainbow-far', near:'bg-rainbow-near', soil:'#756892', cap:'cloud-pink', body:'cloud-pink', bodyStep:18, top:'cloud-pink', topStep:20},
+   art:{far:'bg-rainbow-far', near:'bg-rainbow-near', soil:'#756892', tops:['cloud-pink', 'cloud-rainbow'], topStep:20,
+     bottoms:[{cap:'cloud-pink', body:'cloud-pink', bodyStep:18}, {img:'ob-lollipop'}, {img:'ob-cupcake'}]},
    bot:['#ffffff','#fff3fb'], top:['#ffffff','#f3f9ff'], recipe:{star:2, flower:2, drop:2, feather:1}, speed:1.2, gap:86, length:24, decoys:['sock', 'shoe', 'fish', 'snail'], moving:0.4, flock:'birds', specials:['comet', 'bubble'], magic:'rainbow'},
 ];
 
@@ -436,7 +445,8 @@ function loadArt(names){
 }
 loadArt([...Object.keys(RIDER.anims).map(n => 'witch-' + n), 'cottage', 'cauldron', 'comet', 'bird', 'bat', ...Object.values(DECOYS).map(d => d.img), ...FRIENDS.filter(f => f.img).map(f => f.img),
   ...Object.values(ING).map(i => i.img),
-  ...LEVELS.flatMap(l => Object.entries(l.art || {}).filter(([k]) => ['far', 'near', 'cap', 'body', 'foot', 'top'].includes(k)).map(([, v]) => v))]
+  ...LEVELS.flatMap(l => { const a = l.art || {};
+    return [a.far, a.near, ...(a.tops || []), ...(a.hang || []), ...(a.bottoms || []).flatMap(v => [v.cap, v.body, v.foot, v.img])].filter(Boolean); })]
   .filter((n, i, a) => a.indexOf(n) === i));
 const R = v => Math.round(v * RES) / RES;   // snap to the picture pixel grid
 const uw = im => im.width / RES, uh = im => im.height / RES;
@@ -522,8 +532,19 @@ function spawnAhead(){
     const b = band(), room = b - lv.gap;
     const prev = pillars[pillars.length - 1];
     const prevGy = prev ? prev.gy : 0.5;
-    const gy = clamp(prevGy + rand(-1, 1) * Math.min(1, MAX_SHIFT / room), 0, 1);
-    const p = {x: nextX, gy, gap: lv.gap, move: lv.moving && Math.random() < lv.moving ? {sp: rand(1.4, 2.2), ph: rand(0, 6.3)} : null};
+    const shift = Math.min(1, MAX_SHIFT / room), move = lv.moving && Math.random() < lv.moving ? {sp: rand(1.4, 2.2), ph: rand(0, 6.3)} : null;
+    let gy = clamp(prevGy + rand(-1, 1) * shift, 0, 1), bot;
+    // pick what stands under this gap first; a single picture gets its gap placed just above it, if the gap
+    // can move that far from the last one
+    const want = pickBottom();
+    if(want && want.img && ART[want.img]){
+      const fit = (ground() - (uh(ART[want.img]) - 4) - (move ? MOVE_AMP : 0) - rand(0, 8) - CEIL - lv.gap) / room;
+      if(fit >= 0 && fit <= 1 && Math.abs(fit - prevGy) <= shift){ gy = fit; bot = want; }
+      else if(fit >= 0 && fit <= 1) gy = clamp(prevGy + Math.sign(fit - prevGy) * shift, 0, 1);   // too far: head that way
+    }
+    const p = {x: nextX, gy, gap: lv.gap, move, seed: Math.floor(rand(0, 1000))};
+    p.bot = bot || chooseBottom(ground() - (CEIL + lv.gap + gy * room) - (move ? MOVE_AMP : 0));
+    p.hang = lv.art && lv.art.hang && Math.random() < 0.6 ? pick(lv.art.hang) : null;
     const cy = (lv.gap / 2 + gy * room) / b;            // gap middle as a fraction of the band
     const inGap = !p.move && Math.random() < 0.4;   // nothing waits inside a gap that moves
     const x = inGap ? p.x + PILLAR_W / 2 : p.x - (PILLAR_EVERY - PILLAR_W) / 2;
@@ -537,13 +558,43 @@ function spawnAhead(){
   }
 }
 
+// What stands under a gap with `room` units between it and the ground: the tallest single picture that fits
+// (or one nearly as tall), or the stack when there's lots of room. Nothing at all when even the smallest won't fit,
+// so nothing is ever pushed into the ground.
+function chooseBottom(room){
+  const vs = (lv.art && lv.art.bottoms) || [];
+  const singles = vs.filter(v => v.img && ART[v.img]).map(v => ({v, h: uh(ART[v.img]) - 4}));
+  const stack = vs.find(v => v.cap && ART[v.cap]);
+  const stackMin = stack ? uh(ART[stack.cap]) + (stack.foot && ART[stack.foot] ? uh(ART[stack.foot]) : 0) - 8 : Infinity;
+  const fit = singles.filter(o => o.h <= room), tallest = fit.reduce((m, o) => Math.max(m, o.h), 0);
+  const near = fit.filter(o => o.h >= tallest * 0.7).map(o => o.v);
+  if(stack && room >= stackMin && (room > tallest + 14 || !near.length || Math.random() < 0.4)) return stack;
+  return near.length ? pick(near) : null;
+}
+// a kind of bottom obstacle at random: the tall stack a bit less often than each single picture
+function pickBottom(){
+  const vs = (lv.art && lv.art.bottoms) || [];
+  if(!vs.length) return null;
+  const w = vs.map(v => v.cap ? STACK_SHARE : (1 - STACK_SHARE) / Math.max(1, vs.length - 1));
+  let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  for(let i = 0; i < vs.length; i++){ if((r -= w[i]) <= 0) return vs[i]; }
+  return vs[vs.length - 1];
+}
+// the top of what stands under an obstacle's gap (a single picture can be lower than the gap)
+function bottomTop(p, b){
+  if(!p.bot) return Infinity;
+  if(p.bot.img && ART[p.bot.img]) return Math.max(b, ground() + 4 - uh(ART[p.bot.img]) + 3);
+  return b;
+}
+
 function hitRect(cx, cy, r, x0, y0, x1, y1){
   const nx = clamp(cx, x0, x1), ny = clamp(cy, y0, y1);
   return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r;
 }
 function hits(p, x, y){
   const gc = gapCentre(p), t = gc - p.gap / 2, b = gc + p.gap / 2;
-  return hitRect(x, y, HIT_R, p.x, -50, p.x + PILLAR_W, t) || hitRect(x, y, HIT_R, p.x, b, p.x + PILLAR_W, vh + 50);
+  const bt = (lv.art && lv.art.bottoms) ? bottomTop(p, b) : b;
+  return hitRect(x, y, HIT_R, p.x, -50, p.x + PILLAR_W, t) || (bt < vh && hitRect(x, y, HIT_R, p.x, bt, p.x + PILLAR_W, vh + 50));
 }
 
 function flap(){
@@ -998,21 +1049,34 @@ function strip(img, off, y){
 function drawPillar(p){
   const x = p.x - cam, gc = gapCentre(p), t = gc - p.gap / 2, b = gc + p.gap / 2, g = ground(), art = lv.art || {};
   const cx = x + PILLAR_W / 2;
-  const cap = ART[art.cap], body = ART[art.body], top = ART[art.top];
-  if(cap && body && top){
-    const odd = (p.x / PILLAR_EVERY) % 2 ? 2 : -2;
-    // up from the ground: the body stacked from the cap down (a wobbly pile when it has a bodyStep), on its foot
-    const step = art.bodyStep || uh(body), foot = ART[art.foot];
-    for(let y = b - 4 + uh(cap) - (foot ? 0 : 8), i = 0; y < g + 4; y += step, i++){   // a tree's trunk joins its crown exactly
-      const dx = art.bodyStep ? (i % 2 ? 4 : -4) + odd : 0;
-      pic(body, cx - uw(body) / 2 + dx, y);
+  const tops = (art.tops || []).map(n => ART[n]).filter(Boolean);
+  if(art.bottoms && tops.length){
+    const odd = (p.seed % 2) ? 2 : -2, v = p.bot;
+    // up from the ground: a single picture standing there, or a stack from the cap at the gap down to the ground
+    if(v && v.img){ const im = ART[v.img]; if(im) pic(im, cx - uw(im) / 2, g + 4 - uh(im)); }
+    else if(v){
+      const cap = ART[v.cap], body = ART[v.body], foot = ART[v.foot];
+      if(cap && body){
+        const step = v.bodyStep || uh(body);
+        for(let y = b - 4 + uh(cap) - (foot ? 0 : 8), i = 0; y < g + 4; y += step, i++){   // a tree's trunk joins its crown exactly
+          const dx = v.bodyStep ? (i % 2 ? 4 : -4) + odd : 0;
+          pic(body, cx - uw(body) / 2 + dx, y);
+        }
+        if(foot) pic(foot, cx - uw(foot) / 2, g + 4 - uh(foot));
+        pic(cap, cx - uw(cap) / 2, b - 4);
+      }
     }
-    if(foot) pic(foot, cx - uw(foot) / 2, g + 4 - uh(foot));
-    pic(cap, cx - uw(cap) / 2, b - 4);
-    // down from the sky: a pile whose lowest piece hangs at the gap (drawn top first, so lower ones are in front)
-    const ys = [];
-    for(let y = t - uh(top) + 6; y > -uh(top); y -= art.topStep || 20) ys.push(y);
-    ys.reverse().forEach((y, i) => pic(top, cx - uw(top) / 2 + ((ys.length - i) % 2 ? 5 : -5) + odd, y));
+    // down from the sky: a pile of mixed pieces whose lowest one hangs at the gap (sometimes with something
+    // dangling from it); drawn top first, so lower ones are in front
+    const pieces = [], hang = p.hang && ART[p.hang];
+    let y = t + 6;
+    if(hang){ pieces.push({im: hang, y: y - uh(hang), dx: 0}); y = y - uh(hang) + 10; }
+    for(let i = 0; y > -10; i++){
+      const im = tops[(p.seed + i * 7) % tops.length];
+      pieces.push({im, y: y - uh(im), dx: (i % 2 ? 5 : -5) + odd});
+      y -= art.topStep || 20;
+    }
+    pieces.reverse().forEach(pc => pic(pc.im, cx - uw(pc.im) / 2 + pc.dx, pc.y));
     return;
   }
   ctx.fillStyle = lv.top[0]; ctx.beginPath(); ctx.roundRect(x, -10, PILLAR_W, t + 10, [0, 0, 8, 8]); ctx.fill();

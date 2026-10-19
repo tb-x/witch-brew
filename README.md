@@ -109,6 +109,7 @@ At the top of the script in `index.html`:
 | `OWL_EVERY` | How often the owl hoots and points at the next ingredient |
 | `STAR_RECHARGE` | Seconds before the stars can carry her safely through another bump |
 | `DASH_EVERY`, `DASH_TIME`, `DASH_SPEED` | The unicorn's rainbow dash: how often, how long, how much faster |
+| `STACK_SHARE` | Share of obstacles that are the level's tall one (oak, fir, hay bales, rock, tower, cloud pile); the rest are the shorter pictures |
 | `MOVE_AMP` | How far a moving gap bobs up and down (each level's `moving` says how many gaps move) |
 | `WIND_EVERY`, `WIND_TIME`, `WIND_PUSH` | Snowy gusts: how often, how long, how hard |
 | `FLOCK_EVERY`, `FLOCK_ESCAPE` | Seconds between flocks of birds or bats, and how fast they shoot off when she startles them |
@@ -120,7 +121,7 @@ At the top of the script in `index.html`:
 | `ING`, `DECOYS` | The ingredients (emoji, picture, words, potion colour) and the things to avoid |
 | `FRIENDS` | The friend each level adds, its picture and where it sits on the broom (in pixels of the witch's picture) |
 | `RIDER` | Where the witch's body is in her picture, and how high the broom is in each animation frame, so the friends bob with it |
-| `LEVELS` | Per level: sky colours, recipe, `speed`, `gap` (height of the gaps), `length` (obstacles before the cottage, 14 on level 1 up to 24 on level 6; the ingredients are spread evenly along the way), `decoys` (which things to avoid), `moving` (share of gaps that bob), `wind`, `flock` (birds or bats), `dark`, `specials` (shooting stars and bubbles), the extra `magic`, and `art`: its background strips (`far`, `near`, and `soil`, the colour under them) and its obstacles: a `cap` at the gap, a `body` stacked down to the ground (`bodyStep` makes it a wobbly pile), and a `top` piled up into the sky (`topStep` apart). The other colours are only used while the pictures load |
+| `LEVELS` | Per level: sky colours, recipe, `speed`, `gap` (height of the gaps), `length` (obstacles before the cottage, 14 on level 1 up to 24 on level 6; the ingredients are spread evenly along the way), `decoys` (which things to avoid), `moving` (share of gaps that bob), `wind`, `flock` (birds or bats), `dark`, `specials` (shooting stars and bubbles), the extra `magic`, and `art`: its background strips (`far`, `near`, and `soil`, the colour under them) and its obstacles: `bottoms`, the kinds that stand on the ground (single pictures with their own height, or a stack of a `cap` at the gap, a `body` stacked down to the ground, `bodyStep` making it a wobbly pile, and a `foot`), `tops`, the pieces mixed in the piles hanging from the sky (`topStep` apart), and `hang`, things that sometimes dangle from the bottom of a pile. |
 | `LINES` | Every spoken line (its clip is `assets/say-<key>.mp3`; the text is for the device's voice if the clip can't load) |
 
 ## The plan from here
@@ -197,6 +198,15 @@ which is no longer in the game. The untouched originals are in `art-src/`; `pyth
 - Level 6: `bg-rainbow-far.png` (pastel cloud hills with a fairy castle; its sky stays) and
   `bg-rainbow-near.png` (the band of flowers along the bottom of its picture); `cloud-pink.png` piled
   up from the ground and down from the sky.
+- More obstacles, so a level isn't the same thing over and over (`assets/ob-*.png`, standing on the
+  ground; each obstacle gets one that fits under its gap, with the gap placed to suit it, so nothing
+  is ever pushed into the ground): a flowering bush and an apple tree (level 1), a giant toadstool and
+  a fern (2), a scarecrow and a pile of pumpkins (3), a snowy fir and a snowman (4), a stack of spell
+  books, glowing mushrooms and a shrub with fireflies (5), a lollipop and a cupcake (6). For the piles
+  hanging from the sky: a second cloud (`cloud2.png`), golden autumn leaves (`leaves-gold.png`) and a
+  cloud with a rainbow (`cloud-rainbow.png`), mixed with the first ones; and things that sometimes
+  dangle from the bottom of a pile: a beehive on a branch (`beehive.png`, forest), icicles
+  (`icicles.png`, snow) and a string of lanterns and stars (`lanterns-hanging.png`, night).
 - PixelLab paints a sky behind most landscape strips even when asked not to; the script flood-fills
   it away from the top. Every near strip is cropped so its grass line is 80 pixels (40 game units)
   down, which the game lines up with the ground, and the colour under it (`soil`) fills the rest.
