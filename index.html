@@ -820,7 +820,7 @@ function startBrew(){
   sfx.home();
   say('pot');
 }
-const cauldron = () => ({x: R(vw * 0.5), y: ground() - 29});   // its potion is 14 units above y
+const cauldron = () => ({x: R(vw * 0.5), y: ground() + GROUND_SINK - 32});   // its potion is 14 units above y, its logs in the grass
 const brewWitch = () => ({x: cauldron().x - Math.min(64, vw * 0.33), y: ground() - 36});
 function basketPos(i){
   const n = brew.basket.length, sp = Math.min(28, (vw - 30) / n);
@@ -1147,8 +1147,8 @@ function drawStickWitch(x, y, ang){
 function drawCottage(x){
   const g = ground(), im = ART.cottage;
   if(!im) return;
-  pic(im, x - uw(im) / 2, g + 6 - uh(im));
-  const cx = x - uw(im) / 2 + 62, cy = g + 6 - uh(im) + 5;   // the top of the chimney
+  pic(im, x - uw(im) / 2, g + GROUND_SINK + 2 - uh(im));   // standing in the grass, like everything else
+  const cx = x - uw(im) / 2 + 62, cy = g + GROUND_SINK + 2 - uh(im) + 5;   // the top of the chimney
   for(let i = 0; i < 3; i++){ const k = (time * 0.6 + i / 3) % 1;
     ctx.fillStyle = `rgba(235,235,245,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(R(cx + k * 10), R(cy - 3 - k * 24), 3 + k * 4, 0, 7); ctx.fill(); }
 }
