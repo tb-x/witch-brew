@@ -109,6 +109,7 @@ At the top of the script in `index.html`:
 | `OWL_EVERY` | How often the owl hoots and points at the next ingredient |
 | `STAR_RECHARGE` | Seconds before the stars can carry her safely through another bump |
 | `DASH_EVERY`, `DASH_TIME`, `DASH_SPEED` | The unicorn's rainbow dash: how often, how long, how much faster |
+| `GROUND_SINK` | How far below the ground line things standing on the ground have their feet, so their shadows sit in the grass |
 | `STACK_SHARE` | Share of obstacles that are the level's tall one (oak, fir, hay bales, rock, tower, cloud pile); the rest are the shorter pictures |
 | `MOVE_AMP` | How far a moving gap bobs up and down (each level's `moving` says how many gaps move) |
 | `WIND_EVERY`, `WIND_TIME`, `WIND_PUSH` | Snowy gusts: how often, how long, how hard |

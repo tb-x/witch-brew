@@ -125,6 +125,7 @@ const DASH_TIME = 2.5;       // ...lasts this long...
 const DASH_SPEED = 1.6;      // ...and makes her this much faster, flying through everything
 const UNICORN_EVERY = 3;     // the unicorn picks a new place to fly to (round the witch) about this often
 // moving things and special pickups (each level in LEVELS says which it has)
+const GROUND_SINK = 10;      // how far below the ground line things standing on the ground have their feet, so they stand in the grass
 const STACK_SHARE = 0.35;    // share of obstacles that are the level's tall stack (tree, hay bales, rock, tower...); the rest are the shorter pictures
 const MOVE_AMP = 14;         // how far a moving gap bobs up and down
 const WIND_EVERY = 7, WIND_TIME = 2, WIND_PUSH = 110;   // snowy gusts: how often, how long, how hard (units/s²)
@@ -538,7 +539,7 @@ function spawnAhead(){
     // can move that far from the last one
     const want = pickBottom();
     if(want && want.img && ART[want.img]){
-      const fit = (ground() - (uh(ART[want.img]) - 4) - (move ? MOVE_AMP : 0) - rand(0, 8) - CEIL - lv.gap) / room;
+      const fit = (ground() - (uh(ART[want.img]) - GROUND_SINK) - (move ? MOVE_AMP : 0) - rand(0, 8) - CEIL - lv.gap) / room;
       if(fit >= 0 && fit <= 1 && Math.abs(fit - prevGy) <= shift){ gy = fit; bot = want; }
       else if(fit >= 0 && fit <= 1) gy = clamp(prevGy + Math.sign(fit - prevGy) * shift, 0, 1);   // too far: head that way
     }
@@ -563,7 +564,7 @@ function spawnAhead(){
 // so nothing is ever pushed into the ground.
 function chooseBottom(room){
   const vs = (lv.art && lv.art.bottoms) || [];
-  const singles = vs.filter(v => v.img && ART[v.img]).map(v => ({v, h: uh(ART[v.img]) - 4}));
+  const singles = vs.filter(v => v.img && ART[v.img]).map(v => ({v, h: uh(ART[v.img]) - GROUND_SINK}));
   const stack = vs.find(v => v.cap && ART[v.cap]);
   const stackMin = stack ? uh(ART[stack.cap]) + (stack.foot && ART[stack.foot] ? uh(ART[stack.foot]) : 0) - 8 : Infinity;
   const fit = singles.filter(o => o.h <= room), tallest = fit.reduce((m, o) => Math.max(m, o.h), 0);
@@ -583,7 +584,7 @@ function pickBottom(){
 // the top of what stands under an obstacle's gap (a single picture can be lower than the gap)
 function bottomTop(p, b){
   if(!p.bot) return Infinity;
-  if(p.bot.img && ART[p.bot.img]) return Math.max(b, ground() + 4 - uh(ART[p.bot.img]) + 3);
+  if(p.bot.img && ART[p.bot.img]) return Math.max(b, ground() + GROUND_SINK - uh(ART[p.bot.img]) + 3);
   return b;
 }
 
@@ -1053,7 +1054,7 @@ function drawPillar(p){
   if(art.bottoms && tops.length){
     const odd = (p.seed % 2) ? 2 : -2, v = p.bot;
     // up from the ground: a single picture standing there, or a stack from the cap at the gap down to the ground
-    if(v && v.img){ const im = ART[v.img]; if(im) pic(im, cx - uw(im) / 2, g + 4 - uh(im)); }
+    if(v && v.img){ const im = ART[v.img]; if(im) pic(im, cx - uw(im) / 2, g + GROUND_SINK - uh(im)); }
     else if(v){
       const cap = ART[v.cap], body = ART[v.body], foot = ART[v.foot];
       if(cap && body){
@@ -1062,7 +1063,7 @@ function drawPillar(p){
           const dx = v.bodyStep ? (i % 2 ? 4 : -4) + odd : 0;
           pic(body, cx - uw(body) / 2 + dx, y);
         }
-        if(foot) pic(foot, cx - uw(foot) / 2, g + 4 - uh(foot));
+        if(foot) pic(foot, cx - uw(foot) / 2, g + GROUND_SINK - uh(foot));
         pic(cap, cx - uw(cap) / 2, b - 4);
       }
     }
